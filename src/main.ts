@@ -8,7 +8,7 @@ import {
   computeGridSize,
 } from './core/constants';
 import { registerAllElements } from './elements/definitions';
-import { registryArray } from './elements/registry';
+import { getDefinitionByKey, registryArray } from './elements/registry';
 import { Renderer } from './rendering/Renderer';
 import { Camera } from './rendering/Camera';
 import { drawBrushCursor } from './rendering/BrushCursor';
@@ -23,6 +23,7 @@ import { EventBus } from './effects/EventBus';
 import { ParticleSystem } from './effects/Particles';
 import { ScreenShake } from './effects/ScreenShake';
 import { deserialize } from './state/Serializer';
+import { DEFAULT_PAINT_TEMP } from './state/Store';
 import { showToast } from './ui/Toast';
 
 /**
@@ -178,6 +179,14 @@ const bootstrap = () => {
     if (s.heatMode !== prev.heatMode) renderer.heatMode = s.heatMode;
     if (s.drawerOpen !== prev.drawerOpen) {
       document.body.dataset.drawerOpen = s.drawerOpen ? 'true' : 'false';
+    }
+    // Auto-sync the paint-temperature slider to each element's natural
+    // spawn temperature. Lava arrives at 110°, ice at −20°, water at
+    // 10°, etc. User can still override by dragging the slider.
+    if (s.selectedKey !== prev.selectedKey) {
+      const def = getDefinitionByKey(s.selectedKey);
+      const spawn = def?.thermal?.spawnTemp ?? DEFAULT_PAINT_TEMP;
+      if (spawn !== s.paintTemp) store.getState().setPaintTemp(spawn);
     }
   });
 

@@ -50,6 +50,14 @@ export interface ThermalProfile {
   /** Thermal conductivity 0..0.5. Higher = exchanges heat faster with neighbors. */
   conductivity: number;
   /**
+   * The material's natural temperature when it enters the world. Lava
+   * arrives molten, ice arrives frozen, cryo arrives liquid-nitrogen
+   * cold. Most mundane materials default to 20° (room temperature).
+   * The user's paint-temp slider auto-syncs to this value when an
+   * element is selected, and then behaves as an override when dragged.
+   */
+  spawnTemp?: number;
+  /**
    * Relative heat capacity. Incoming thermal energy is divided by this
    * value, so a higher capacity means the cell resists temperature
    * change for the same amount of flux. Think: water holds its heat,

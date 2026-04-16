@@ -141,6 +141,7 @@ const defs: ElementDefinition[] = [
     thermal: {
       conductivity: 0.060,
       heatCapacity: 3.0,
+      spawnTemp: 10,
       freezeAt: -5,
       freezesInto: 'ice',
       boilAt: 90,
@@ -189,6 +190,7 @@ const defs: ElementDefinition[] = [
     thermal: {
       conductivity: 0.130,
       heatCapacity: 2.5,
+      spawnTemp: 110,
       emitTemp: 110,
       emitStrength: 0.20,
       freezeAt: 40,
@@ -206,7 +208,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'F',
     description: 'Self-extinguishing heat at 90°. Spreads through flammables.',
     update: fireReaction,
-    thermal: { conductivity: 0.150, heatCapacity: 0.5, emitTemp: 90, emitStrength: 0.25 },
+    thermal: { conductivity: 0.150, heatCapacity: 0.5, spawnTemp: 85, emitTemp: 90, emitStrength: 0.25 },
   },
   {
     id: 9,
@@ -218,7 +220,7 @@ const defs: ElementDefinition[] = [
     density: 2,
     description: 'Rises and fades.',
     update: createGasBehavior({ density: 2, decayChance: 0.006 }),
-    thermal: { conductivity: 0.015, heatCapacity: 0.3 },
+    thermal: { conductivity: 0.015, heatCapacity: 0.3, spawnTemp: 45 },
   },
   {
     id: 10,
@@ -230,7 +232,7 @@ const defs: ElementDefinition[] = [
     density: 3,
     description: 'Condenses back into water below 50°.',
     update: createGasBehavior({ density: 3, decayChance: 0.0015 }),
-    thermal: { conductivity: 0.030, heatCapacity: 0.4, condenseAt: 50, condensesInto: 'water' },
+    thermal: { conductivity: 0.030, heatCapacity: 0.4, spawnTemp: 95, condenseAt: 50, condensesInto: 'water' },
   },
   {
     id: 11,
@@ -291,6 +293,7 @@ const defs: ElementDefinition[] = [
     thermal: {
       conductivity: 0.080,
       heatCapacity: 2.0,
+      spawnTemp: -20,
       emitTemp: -15,
       emitStrength: 0.10,
       meltAt: 3,
@@ -318,7 +321,7 @@ const defs: ElementDefinition[] = [
     density: 40,
     description: 'Burnt remains.',
     update: createPowderBehavior(40),
-    thermal: { conductivity: 0.020 },
+    thermal: { conductivity: 0.020, spawnTemp: 30 },
   },
   {
     id: 17,
@@ -368,7 +371,7 @@ const defs: ElementDefinition[] = [
     density: 1,
     description: 'Single-tick igniter. Also energises conductors.',
     update: sparkReaction,
-    thermal: { conductivity: 0.200, emitTemp: 60, emitStrength: 0.25 },
+    thermal: { conductivity: 0.200, spawnTemp: 60, emitTemp: 60, emitStrength: 0.25 },
   },
   {
     id: 21,
@@ -482,6 +485,7 @@ const defs: ElementDefinition[] = [
     update: createPowderBehavior(35),
     thermal: {
       conductivity: 0.060,
+      spawnTemp: -10,
       emitTemp: -10,
       emitStrength: 0.10,
       meltAt: 1,
@@ -611,7 +615,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Persistent 120° heat source.',
     update: torchBehavior,
-    thermal: { conductivity: 0.180, emitTemp: 120, emitStrength: 0.25 },
+    thermal: { conductivity: 0.180, spawnTemp: 120, emitTemp: 120, emitStrength: 0.25 },
   },
   {
     id: 39,
@@ -651,6 +655,7 @@ const defs: ElementDefinition[] = [
     renderColor: pulseRenderColor(0x44a556, 0x9cff7a, 0.005),
     thermal: {
       conductivity: 0.100,
+      spawnTemp: 30,
       emitTemp: 30,
       emitStrength: 0.15,
       ignitesAt: 100,
@@ -697,6 +702,7 @@ const defs: ElementDefinition[] = [
     thermal: {
       conductivity: 0.180,
       heatCapacity: 2.5,
+      spawnTemp: -80,
       emitTemp: -80,
       emitStrength: 0.20,
       boilAt: -40,
@@ -883,7 +889,7 @@ const defs: ElementDefinition[] = [
     description: 'Annihilates on contact. Do not breathe near it.',
     update: antimatterBehavior,
     renderColor: pulseRenderColor(0xff1a88, 0xffc8e8, 0.006),
-    thermal: { conductivity: 0.080, emitTemp: 40, emitStrength: 0.15 },
+    thermal: { conductivity: 0.080, spawnTemp: 40, emitTemp: 40, emitStrength: 0.15 },
   },
   {
     id: 59,
@@ -897,6 +903,7 @@ const defs: ElementDefinition[] = [
     update: ice9Behavior,
     thermal: {
       conductivity: 0.100,
+      spawnTemp: -20,
       emitTemp: -20,
       emitStrength: 0.10,
       meltAt: 20,
@@ -993,7 +1000,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Erupts a column of steam and water every few seconds.',
     update: geyserBehavior,
-    thermal: { conductivity: 0.080, emitTemp: 50, emitStrength: 0.10 },
+    thermal: { conductivity: 0.080, spawnTemp: 50, emitTemp: 50, emitStrength: 0.10 },
   },
   {
     id: 67,
@@ -1042,7 +1049,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.15,
     description: 'Molten wax. Hardens below 30°.',
     update: createLiquidBehavior(35, 2),
-    thermal: { conductivity: 0.025, freezeAt: 30, freezesInto: 'wax', ignitesAt: 85 },
+    thermal: { conductivity: 0.025, spawnTemp: 55, freezeAt: 30, freezesInto: 'wax', ignitesAt: 85 },
   },
   {
     id: 71,
