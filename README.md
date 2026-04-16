@@ -181,6 +181,12 @@ Key optimisations:
 - `pnpm build` — TypeScript check and production build
 - `pnpm preview` — serve the production build locally
 - `pnpm typecheck` — TypeScript check only
+- `pnpm test` — Vitest unit suite (core + rendering + state)
+- `pnpm test:coverage` — v8 coverage report
+
+## Tests
+
+Unit tests cover the engine primitives: cell encoding, chunked grid activity, ping-pong thermal diffusion with emitters, lookup-array derivation, camera zoom invariants, serializer round-trip, and the registry catalog. Run them locally with `pnpm test`; CI runs them on every push and PR.
 
 ## License
 
