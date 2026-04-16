@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/hero.svg" alt="Flux Sandbox" width="100%" />
+
 # Flux Sandbox
 
 **A falling-sand cellular automaton with a thermal field, chunked simulation, and 54 reactive materials.**
