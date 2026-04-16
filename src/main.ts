@@ -180,6 +180,7 @@ const bootstrap = () => {
   const emptyId = getIdByKey('empty');
   store.subscribe((s, prev) => {
     if (s.heatMode !== prev.heatMode) renderer.heatMode = s.heatMode;
+    if (s.lightMode !== prev.lightMode) renderer.lightMode = s.lightMode;
     if (s.drawerOpen !== prev.drawerOpen) {
       document.body.dataset.drawerOpen = s.drawerOpen ? 'true' : 'false';
     }

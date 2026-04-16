@@ -4,7 +4,7 @@ import { getLife, getVariant } from '@/core/types';
 import { registryArray } from '@/elements/registry';
 import { Camera } from './Camera';
 import { VisualLookups } from './VisualLookups';
-import { HeatMode } from '@/state/Store';
+import { HeatMode, LightMode } from '@/state/Store';
 import { TEMP_MAX, TEMP_MIN } from '@/core/Lookups';
 
 // ─── heat-map palette ──────────────────────────────────────────────────
@@ -86,9 +86,13 @@ export class Renderer {
   private readonly bloomBuffer: ImageData;
   private readonly bloomCanvas: HTMLCanvasElement;
   private readonly bloomCtx: CanvasRenderingContext2D;
+  private readonly lightingBuffer: ImageData;
+  private readonly lightingCanvas: HTMLCanvasElement;
+  private readonly lightingCtx: CanvasRenderingContext2D;
   private readonly ctx: CanvasRenderingContext2D;
   private flashIntensity = 0;
   public heatMode: HeatMode = 'off';
+  public lightMode: LightMode = 'day';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -117,6 +121,17 @@ export class Renderer {
     if (!blctx) throw new Error('2d bloom context unavailable');
     this.bloomCtx = blctx;
     this.bloomBuffer = this.bloomCtx.createImageData(grid.width, grid.height);
+
+    // Lighting buffer — identical layout to bloom, but drawn with a larger
+    // blur so glowing cells cast a wide halo; in dusk/night this illuminates
+    // the otherwise-darkened world around each emitter.
+    this.lightingCanvas = document.createElement('canvas');
+    this.lightingCanvas.width = grid.width;
+    this.lightingCanvas.height = grid.height;
+    const lctx = this.lightingCanvas.getContext('2d', { alpha: true });
+    if (!lctx) throw new Error('2d lighting context unavailable');
+    this.lightingCtx = lctx;
+    this.lightingBuffer = this.lightingCtx.createImageData(grid.width, grid.height);
   }
 
   /** Exposed so overlays (particles, brush cursor) can draw on the same ctx. */
@@ -148,9 +163,11 @@ export class Renderer {
    * Call this first, then draw overlays, then `renderPostProcess()`.
    */
   renderGrid(shakeX = 0, shakeY = 0): void {
-    const { grid, buffer, bloomBuffer, field, heatMode, visualLookups } = this;
+    const { grid, buffer, bloomBuffer, lightingBuffer, field, heatMode, lightMode, visualLookups } = this;
     const data = buffer.data;
     const bloomData = bloomBuffer.data;
+    const lightingData = lightingBuffer.data;
+    const lightingOn = lightMode !== 'day';
     const cells = grid.cells;
     const temps = field.temps;
     const n = cells.length;
@@ -177,6 +194,7 @@ export class Renderer {
     const heatmapMode = heatMode === 'heatmap';
 
     let hasBloom = false;
+    let hasLight = false;
 
     for (let i = 0; i < n; i++) {
       const cell = cells[i];
@@ -215,6 +233,12 @@ export class Renderer {
         bloomData[p + 1] = 0;
         bloomData[p + 2] = 0;
         bloomData[p + 3] = 0;
+        if (lightingOn) {
+          lightingData[p] = 0;
+          lightingData[p + 1] = 0;
+          lightingData[p + 2] = 0;
+          lightingData[p + 3] = 0;
+        }
         continue;
       }
 
@@ -243,6 +267,12 @@ export class Renderer {
         bloomData[p + 1] = 0;
         bloomData[p + 2] = 0;
         bloomData[p + 3] = 0;
+        if (lightingOn) {
+          lightingData[p] = 0;
+          lightingData[p + 1] = 0;
+          lightingData[p + 2] = 0;
+          lightingData[p + 3] = 0;
+        }
         continue;
       }
 
@@ -328,11 +358,30 @@ export class Renderer {
         bloomData[p + 2] = (b * bAmt) | 0;
         bloomData[p + 3] = Math.min(255, (bAmt * 255) | 0);
         hasBloom = true;
+        if (lightingOn) {
+          // Push the emitter toward full brightness — a weak source stays
+          // dim after the wide blur and reads as "nothing". Multi-pass
+          // compositing stacks, so a mid-strength emitter still gives a
+          // visible halo without torching the frame.
+          const la = bAmt >= 0.9 ? 1 : bAmt * 1.5;
+          const la2 = la > 1 ? 1 : la;
+          lightingData[p] = (r * la2) | 0;
+          lightingData[p + 1] = (g * la2) | 0;
+          lightingData[p + 2] = (b * la2) | 0;
+          lightingData[p + 3] = 255;
+          hasLight = true;
+        }
       } else {
         bloomData[p] = 0;
         bloomData[p + 1] = 0;
         bloomData[p + 2] = 0;
         bloomData[p + 3] = 0;
+        if (lightingOn) {
+          lightingData[p] = 0;
+          lightingData[p + 1] = 0;
+          lightingData[p + 2] = 0;
+          lightingData[p + 3] = 0;
+        }
       }
     }
 
@@ -353,6 +402,52 @@ export class Renderer {
       offsetX + shakeX, offsetY + shakeY,
       grid.width * zoom, grid.height * zoom,
     );
+
+    // ── LIGHTING PASS ───────────────────────────────────────────────
+    // Darken the whole scene by (1 − ambient) then add blurred light from
+    // emitters on top — torches / lava / spark / uranium / portals etc.
+    // cast wide coloured halos that make the lit material actually useful
+    // as illumination, not just decoration. Heatmap mode skips this.
+    if (lightingOn && !heatmapMode) {
+      const ambient = lightMode === 'night' ? 0.12 : 0.42;
+      ctx.globalCompositeOperation = 'multiply';
+      const shade = Math.round(ambient * 255);
+      ctx.fillStyle = `rgb(${shade}, ${shade}, ${Math.round(ambient * 230)})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.globalCompositeOperation = 'source-over';
+
+      if (hasLight) {
+        this.lightingCtx.putImageData(lightingBuffer, 0, 0);
+        // Three-pass blur (wide halo → mid body → bright core) gives a
+        // physically-plausible 1/r² falloff. Reach tracks zoom so a torch
+        // bathes ~20 grid cells regardless of how far the camera is.
+        const reach = Math.max(60, Math.min(320, zoom * 32));
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.filter = `blur(${reach.toFixed(2)}px)`;
+        ctx.drawImage(
+          this.lightingCanvas,
+          0, 0, grid.width, grid.height,
+          offsetX + shakeX, offsetY + shakeY,
+          grid.width * zoom, grid.height * zoom,
+        );
+        ctx.filter = `blur(${(reach * 0.4).toFixed(2)}px)`;
+        ctx.drawImage(
+          this.lightingCanvas,
+          0, 0, grid.width, grid.height,
+          offsetX + shakeX, offsetY + shakeY,
+          grid.width * zoom, grid.height * zoom,
+        );
+        ctx.filter = `blur(${(reach * 0.12).toFixed(2)}px)`;
+        ctx.drawImage(
+          this.lightingCanvas,
+          0, 0, grid.width, grid.height,
+          offsetX + shakeX, offsetY + shakeY,
+          grid.width * zoom, grid.height * zoom,
+        );
+        ctx.filter = 'none';
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
 
     if (hasBloom) {
       this.bloomCtx.putImageData(bloomBuffer, 0, 0);

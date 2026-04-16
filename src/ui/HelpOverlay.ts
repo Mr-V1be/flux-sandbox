@@ -13,6 +13,7 @@ export const mountHelpOverlay = (root: HTMLElement): void => {
       <span><kbd>Mid</kbd>/<kbd>Alt+Drag</kbd> pan</span>
       <span><kbd>F</kbd> fit</span>
       <span><kbd>T</kbd> heat</span>
+      <span><kbd>N</kbd> night</span>
       <span><kbd>C</kbd> clear</span>
     </div>
   `;

@@ -20,12 +20,16 @@ import {
   Save,
   FolderOpen,
   Thermometer,
+  Sun,
+  Moon,
+  CloudMoon,
 } from 'lucide';
 import {
   BrushShape,
   DEFAULT_AMBIENT_TEMP,
   AMBIENT_TEMP_MAX,
   AMBIENT_TEMP_MIN,
+  LightMode,
   store,
 } from '@/state/Store';
 import { Grid } from '@/core/Grid';
@@ -63,6 +67,7 @@ export class Topbar {
   private brushLabel!: HTMLElement;
   private playBtn!: HTMLButtonElement;
   private thermalBtn!: HTMLButtonElement;
+  private lightBtn!: HTMLButtonElement;
   private shapeBtn!: HTMLButtonElement;
   private brushSlider!: HTMLInputElement;
   private tempSlider!: HTMLInputElement;
@@ -151,6 +156,9 @@ export class Topbar {
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">
           <i data-lucide="flame"></i>
         </button>
+        <button data-act="light" class="ui-btn" aria-label="Day / Night" title="Day / Dusk / Night (N)">
+          <i data-lucide="sun"></i>
+        </button>
         <button data-act="share" class="ui-btn" aria-label="Share" title="Copy shareable link">
           <i data-lucide="share-2"></i>
         </button>
@@ -168,6 +176,7 @@ export class Topbar {
 
     this.playBtn = this.root.querySelector('[data-act="play"]') as HTMLButtonElement;
     this.thermalBtn = this.root.querySelector('[data-act="thermal"]') as HTMLButtonElement;
+    this.lightBtn = this.root.querySelector('[data-act="light"]') as HTMLButtonElement;
     this.shapeBtn = this.root.querySelector('[data-act="shape"]') as HTMLButtonElement;
     this.brushSlider = this.root.querySelector('[data-ctrl="brush"]') as HTMLInputElement;
     this.tempSlider = this.root.querySelector('[data-ctrl="temp"]') as HTMLInputElement;
@@ -187,6 +196,7 @@ export class Topbar {
       },
     );
     this.thermalBtn.addEventListener('click', () => store.getState().cycleHeatMode());
+    this.lightBtn.addEventListener('click', () => store.getState().cycleLightMode());
     this.shapeBtn.addEventListener('click', () => store.getState().cycleBrushShape());
     (this.root.querySelector('[data-act="share"]') as HTMLElement).addEventListener(
       'click',
@@ -460,8 +470,15 @@ export class Topbar {
         Play, Pause, Eraser, Circle, Sparkles, ZoomIn, ZoomOut, Maximize2,
         Flame, Square, Minus, Replace, Share2, Menu, Wrench,
         CameraIcon, Video, Save, FolderOpen, Thermometer,
+        Sun, Moon, CloudMoon,
       },
     });
+  }
+
+  private lightIcon(mode: LightMode): string {
+    if (mode === 'dusk') return 'cloud-moon';
+    if (mode === 'night') return 'moon';
+    return 'sun';
   }
 
   private subscribe(): void {
@@ -497,6 +514,17 @@ export class Topbar {
           : s.heatMode === 'tint'
             ? 'Tint overlay (T to switch to heat map)'
             : 'Heat map (T to turn off)';
+
+      this.lightBtn.classList.remove('is-active', 'is-heatmap');
+      if (s.lightMode === 'dusk') this.lightBtn.classList.add('is-active');
+      else if (s.lightMode === 'night') this.lightBtn.classList.add('is-heatmap');
+      this.lightBtn.innerHTML = `<i data-lucide="${this.lightIcon(s.lightMode)}"></i>`;
+      this.lightBtn.title =
+        s.lightMode === 'day'
+          ? 'Daylight (N cycles to dusk / night)'
+          : s.lightMode === 'dusk'
+            ? 'Dusk — soft lighting (N to go darker)'
+            : 'Night — torches & lava illuminate (N to turn off)';
 
       // Update shape icon.
       this.shapeBtn.innerHTML = `<i data-lucide="${SHAPE_ICON[s.brushShape]}"></i>`;

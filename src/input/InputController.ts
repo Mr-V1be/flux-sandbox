@@ -262,6 +262,10 @@ export class InputController {
       store.getState().cycleHeatMode();
       return;
     }
+    if (key === 'n') {
+      store.getState().cycleLightMode();
+      return;
+    }
     const match = listElements().find((d) => d.hotkey && d.hotkey.toLowerCase() === key);
     if (match) store.getState().setSelected(match.key);
   };

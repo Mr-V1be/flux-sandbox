@@ -8,6 +8,15 @@ export type HeatMode = 'off' | 'tint' | 'heatmap';
 export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap'];
 
 /**
+ * Lighting / day-night mode cycled by pressing N.
+ *   day    — no dynamic lighting (default; the current look)
+ *   dusk   — softly darkened world, emitters cast halos — cinematic
+ *   night  — fully dark, only lit zones visible; torches actually useful
+ */
+export type LightMode = 'day' | 'dusk' | 'night';
+export const LIGHT_MODES: LightMode[] = ['day', 'dusk', 'night'];
+
+/**
  * Ambient air temperature range in °C.
  *   -200  approaches liquid-nitrogen territory (cryo pool)
  *     20  room temperature — neutral default
@@ -35,6 +44,7 @@ export interface UiState {
   activeChunks: number;
   tick: number;
   heatMode: HeatMode;
+  lightMode: LightMode;
   drawerOpen: boolean;
   zoom: number;
   setSelected(key: string): void;
@@ -46,6 +56,8 @@ export interface UiState {
   togglePause(): void;
   cycleHeatMode(): void;
   setHeatMode(mode: HeatMode): void;
+  cycleLightMode(): void;
+  setLightMode(mode: LightMode): void;
   toggleDrawer(): void;
   setDrawerOpen(open: boolean): void;
   setStats(patch: Partial<Pick<UiState, 'fps' | 'activeCells' | 'activeChunks' | 'tick' | 'zoom'>>): void;
@@ -62,6 +74,7 @@ export const store = createStore<UiState>((set) => ({
   activeChunks: 0,
   tick: 0,
   heatMode: 'off',
+  lightMode: 'day',
   drawerOpen: false,
   zoom: 1,
   setSelected: (key) => set({ selectedKey: key }),
@@ -85,6 +98,11 @@ export const store = createStore<UiState>((set) => ({
       heatMode: HEAT_MODES[(HEAT_MODES.indexOf(s.heatMode) + 1) % HEAT_MODES.length],
     })),
   setHeatMode: (mode) => set({ heatMode: mode }),
+  cycleLightMode: () =>
+    set((s) => ({
+      lightMode: LIGHT_MODES[(LIGHT_MODES.indexOf(s.lightMode) + 1) % LIGHT_MODES.length],
+    })),
+  setLightMode: (mode) => set({ lightMode: mode }),
   toggleDrawer: () => set((s) => ({ drawerOpen: !s.drawerOpen })),
   setDrawerOpen: (open) => set({ drawerOpen: open }),
   setStats: (patch) => set(patch),
