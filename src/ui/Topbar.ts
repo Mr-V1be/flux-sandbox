@@ -86,7 +86,7 @@ export class Topbar {
           </div>
         </div>
 
-        <div class="flex items-center gap-1.5 ml-3 pl-3 border-l border-neutral-800/70">
+        <div class="flex items-center gap-1.5 ml-3 pl-3 border-l border-neutral-800/70 zoom-cluster">
           <button data-act="zoom-out" class="ui-btn" aria-label="Zoom out" title="Zoom − (−)">
             <i data-lucide="zoom-out"></i>
           </button>
@@ -99,13 +99,13 @@ export class Topbar {
           <span data-out="zoom" class="text-[10px] text-neutral-500 tabular-nums w-10 text-right">100%</span>
         </div>
 
-        <div class="flex items-center gap-2 ml-3 pl-3 border-l border-neutral-800/70">
+        <div class="flex items-center gap-2 ml-3 pl-3 border-l border-neutral-800/70 brush-cluster">
           <button data-act="shape" class="ui-btn" aria-label="Brush shape" title="Brush shape (Tab)">
             <i data-lucide="circle" data-shape-icon></i>
           </button>
           <input type="range" min="1" max="64" value="6" data-ctrl="brush"
             class="accent-neutral-200 w-24 h-1" />
-          <span data-out="brush" class="text-xs text-neutral-400 tabular-nums w-6 text-right">6</span>
+          <span data-out="brush" class="text-xs text-neutral-400 tabular-nums w-6 text-right brush-num">6</span>
         </div>
 
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">

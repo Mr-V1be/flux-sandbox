@@ -2,11 +2,10 @@ import './styles.css';
 
 import { Simulation } from './core/Simulation';
 import {
-  DEFAULT_HEIGHT,
-  DEFAULT_WIDTH,
+  CELL_BUDGET_DESKTOP,
+  CELL_BUDGET_MOBILE,
   EMPTY_ID,
-  MOBILE_WIDTH,
-  MOBILE_HEIGHT,
+  computeGridSize,
 } from './core/constants';
 import { registerAllElements } from './elements/definitions';
 import { registryArray } from './elements/registry';
@@ -102,12 +101,18 @@ const bootstrap = () => {
   });
 
   // ─── Simulation + view ─────────────────────────────────────────────
-  // Detect narrow / coarse-pointer devices and downsize the grid so
-  // we keep 60 FPS on phones without halving the element roster.
+  // Size the grid so its aspect matches the actual stage the user has
+  // right now (portrait phone, landscape desktop, ultrawide, …) under a
+  // per-device cell-count budget. This fills the canvas with no letterboxing.
+  const stage = document.getElementById('stage') as HTMLElement;
   const isSmallDevice =
     window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
-  const gridW = isSmallDevice ? MOBILE_WIDTH : DEFAULT_WIDTH;
-  const gridH = isSmallDevice ? MOBILE_HEIGHT : DEFAULT_HEIGHT;
+  const budget = isSmallDevice ? CELL_BUDGET_MOBILE : CELL_BUDGET_DESKTOP;
+  const { w: gridW, h: gridH } = computeGridSize(
+    stage.clientWidth,
+    stage.clientHeight,
+    budget,
+  );
 
   const simulation = new Simulation(
     { width: gridW, height: gridH, seed: Date.now() & 0xffffffff, bus },
@@ -115,7 +120,6 @@ const bootstrap = () => {
   );
 
   const canvas = document.getElementById('sim') as HTMLCanvasElement;
-  const stage = document.getElementById('stage') as HTMLElement;
   const camera = new Camera(gridW, gridH);
   const renderer = new Renderer(canvas, simulation.grid, simulation.field, camera);
 

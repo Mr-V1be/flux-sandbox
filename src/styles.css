@@ -124,19 +124,27 @@ canvas.sim {
   body[data-drawer-open="true"] #drawer-overlay {
     display: block;
   }
-  /* Tighten topbar on narrow screens — hide brand text, shrink stats. */
-  header#topbar .brand-text {
-    display: none;
-  }
-  header#topbar .topbar-stats {
+  /* Tighten topbar on narrow screens: kill brand text, stats, zoom cluster
+     (pinch handles zoom), and the numeric brush readout. */
+  header#topbar .brand-text,
+  header#topbar .topbar-stats,
+  header#topbar .zoom-cluster,
+  header#topbar .brush-num {
     display: none;
   }
   header#topbar .topbar-actions {
     gap: 4px;
   }
-  /* Compact brush slider */
+  header#topbar .brush-cluster {
+    margin-left: 6px;
+    padding-left: 6px;
+  }
   header#topbar input[data-ctrl="brush"] {
-    width: 64px;
+    width: 96px;
+  }
+  header#topbar {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }
 
