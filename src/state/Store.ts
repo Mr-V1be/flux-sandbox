@@ -7,10 +7,16 @@ export const BRUSH_SHAPES: BrushShape[] = ['circle', 'square', 'spray', 'line', 
 export type HeatMode = 'off' | 'tint' | 'heatmap';
 export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap'];
 
+/** Default ambient painting temperature (°). */
+export const DEFAULT_PAINT_TEMP = 20;
+export const PAINT_TEMP_MIN = -100;
+export const PAINT_TEMP_MAX = 127;
+
 export interface UiState {
   selectedKey: string;
   brushSize: number;
   brushShape: BrushShape;
+  paintTemp: number;
   paused: boolean;
   fps: number;
   activeCells: number;
@@ -23,6 +29,8 @@ export interface UiState {
   setBrush(size: number): void;
   setBrushShape(shape: BrushShape): void;
   cycleBrushShape(): void;
+  setPaintTemp(temp: number): void;
+  resetPaintTemp(): void;
   togglePause(): void;
   cycleHeatMode(): void;
   setHeatMode(mode: HeatMode): void;
@@ -35,6 +43,7 @@ export const store = createStore<UiState>((set) => ({
   selectedKey: 'sand',
   brushSize: 6,
   brushShape: 'circle',
+  paintTemp: DEFAULT_PAINT_TEMP,
   paused: false,
   fps: 0,
   activeCells: 0,
@@ -50,6 +59,14 @@ export const store = createStore<UiState>((set) => ({
     set((s) => ({
       brushShape: BRUSH_SHAPES[(BRUSH_SHAPES.indexOf(s.brushShape) + 1) % BRUSH_SHAPES.length],
     })),
+  setPaintTemp: (temp) =>
+    set({
+      paintTemp: Math.max(
+        PAINT_TEMP_MIN,
+        Math.min(PAINT_TEMP_MAX, Math.round(temp)),
+      ),
+    }),
+  resetPaintTemp: () => set({ paintTemp: DEFAULT_PAINT_TEMP }),
   togglePause: () => set((s) => ({ paused: !s.paused })),
   cycleHeatMode: () =>
     set((s) => ({

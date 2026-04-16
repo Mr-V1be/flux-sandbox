@@ -151,6 +151,7 @@ const bootstrap = () => {
   const input = new InputController(
     canvas,
     simulation.grid,
+    simulation.field,
     camera,
     syncCameraState,
   );

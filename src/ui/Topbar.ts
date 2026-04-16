@@ -19,8 +19,15 @@ import {
   Video,
   Save,
   FolderOpen,
+  Thermometer,
 } from 'lucide';
-import { BrushShape, store } from '@/state/Store';
+import {
+  BrushShape,
+  DEFAULT_PAINT_TEMP,
+  PAINT_TEMP_MAX,
+  PAINT_TEMP_MIN,
+  store,
+} from '@/state/Store';
 import { Grid } from '@/core/Grid';
 import { TemperatureField } from '@/core/TemperatureField';
 import { Camera } from '@/rendering/Camera';
@@ -58,6 +65,8 @@ export class Topbar {
   private thermalBtn!: HTMLButtonElement;
   private shapeBtn!: HTMLButtonElement;
   private brushSlider!: HTMLInputElement;
+  private tempSlider!: HTMLInputElement;
+  private tempLabel!: HTMLElement;
   private recorder!: VideoRecorder;
 
   constructor(
@@ -130,6 +139,15 @@ export class Topbar {
           <span data-out="brush" class="text-xs text-neutral-400 tabular-nums w-6 text-right brush-num">6</span>
         </div>
 
+        <div class="flex items-center gap-2 ml-3 pl-3 border-l border-neutral-800/70 temp-cluster"
+             title="Paint temperature (double-click slider to reset to 20°)">
+          <i data-lucide="thermometer" class="h-3.5 w-3.5"></i>
+          <input type="range" min="${PAINT_TEMP_MIN}" max="${PAINT_TEMP_MAX}"
+            value="${DEFAULT_PAINT_TEMP}" step="1" data-ctrl="temp"
+            class="accent-neutral-200 w-24 h-1" />
+          <span data-out="temp" class="text-xs text-neutral-400 tabular-nums w-9 text-right">${DEFAULT_PAINT_TEMP}°</span>
+        </div>
+
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">
           <i data-lucide="flame"></i>
         </button>
@@ -152,6 +170,8 @@ export class Topbar {
     this.thermalBtn = this.root.querySelector('[data-act="thermal"]') as HTMLButtonElement;
     this.shapeBtn = this.root.querySelector('[data-act="shape"]') as HTMLButtonElement;
     this.brushSlider = this.root.querySelector('[data-ctrl="brush"]') as HTMLInputElement;
+    this.tempSlider = this.root.querySelector('[data-ctrl="temp"]') as HTMLInputElement;
+    this.tempLabel = this.root.querySelector('[data-out="temp"]') as HTMLElement;
     this.brushLabel = this.root.querySelector('[data-out="brush"]') as HTMLElement;
     this.fpsEl = this.root.querySelector('[data-out="fps"]') as HTMLElement;
     this.cellsEl = this.root.querySelector('[data-out="cells"]') as HTMLElement;
@@ -179,6 +199,12 @@ export class Topbar {
     this.brushSlider.addEventListener('input', () => {
       store.getState().setBrush(Number(this.brushSlider.value));
     });
+    this.tempSlider.addEventListener('input', () => {
+      store.getState().setPaintTemp(Number(this.tempSlider.value));
+    });
+    // Double-click the thermometer or the slider to snap back to ambient.
+    this.tempSlider.addEventListener('dblclick', () => store.getState().resetPaintTemp());
+    this.tempLabel.addEventListener('dblclick', () => store.getState().resetPaintTemp());
 
     (this.root.querySelector('[data-act="zoom-in"]') as HTMLElement).addEventListener(
       'click',
@@ -433,7 +459,7 @@ export class Topbar {
       icons: {
         Play, Pause, Eraser, Circle, Sparkles, ZoomIn, ZoomOut, Maximize2,
         Flame, Square, Minus, Replace, Share2, Menu, Wrench,
-        CameraIcon, Video, Save, FolderOpen,
+        CameraIcon, Video, Save, FolderOpen, Thermometer,
       },
     });
   }
@@ -442,6 +468,15 @@ export class Topbar {
     store.subscribe((s) => {
       this.brushSlider.value = String(s.brushSize);
       this.brushLabel.textContent = String(s.brushSize);
+      this.tempSlider.value = String(s.paintTemp);
+      this.tempLabel.textContent = `${s.paintTemp}°`;
+      // Colour the readout: blue cold, neutral warm, amber hot.
+      this.tempLabel.style.color =
+        s.paintTemp >= 60
+          ? '#ffb06a'
+          : s.paintTemp <= -10
+            ? '#8ac8ff'
+            : '#a1a1aa';
       this.fpsEl.textContent = s.fps.toFixed(0);
       this.cellsEl.textContent = s.activeCells.toLocaleString();
       this.chunksEl.textContent = s.activeChunks.toLocaleString();

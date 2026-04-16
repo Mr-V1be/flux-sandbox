@@ -1,4 +1,5 @@
 import { Grid } from '@/core/Grid';
+import { TemperatureField } from '@/core/TemperatureField';
 import { encode, getElement } from '@/core/types';
 import {
   getDefinitionByKey,
@@ -46,6 +47,7 @@ export class InputController {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly grid: Grid,
+    private readonly field: TemperatureField,
     private readonly camera: Camera,
     private readonly onCameraChanged: () => void = () => {},
   ) {
@@ -283,7 +285,12 @@ export class InputController {
     if (!this.grid.inBounds(x, y)) return;
     const id = getElement(this.grid.get(x, y));
     const def = registryArray()[id];
-    if (def && def.key !== 'empty') store.getState().setSelected(def.key);
+    if (def && def.key !== 'empty') {
+      store.getState().setSelected(def.key);
+      // Also sample the cell's current temperature so building onto the
+      // same material preserves its thermal state.
+      store.getState().setPaintTemp(this.field.get(x, y));
+    }
   }
 
   private strokeBetween(
@@ -397,6 +404,9 @@ export class InputController {
 
         const variant = (Math.random() * 255) | 0;
         this.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, variant));
+        // Stamp the brush's current paint temperature onto the fresh cell
+        // so "20° sand next to a red-hot wire" behaves intuitively.
+        if (!erasing) this.field.set(x, y, state.paintTemp);
       }
     }
   }

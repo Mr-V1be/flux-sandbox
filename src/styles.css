@@ -169,11 +169,13 @@ canvas.sim {
     display: block;
   }
   /* Tighten topbar on narrow screens: kill brand text, stats, zoom cluster
-     (pinch handles zoom), and the numeric brush readout. */
+     (pinch handles zoom), numeric brush readout, and the paint-temp slider
+     (users can default to 20° comfortably on mobile). */
   header#topbar .brand-text,
   header#topbar .topbar-stats,
   header#topbar .zoom-cluster,
-  header#topbar .brush-num {
+  header#topbar .brush-num,
+  header#topbar .temp-cluster {
     display: none;
   }
   header#topbar .topbar-actions {
