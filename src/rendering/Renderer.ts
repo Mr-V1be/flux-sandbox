@@ -3,20 +3,33 @@ import { TemperatureField } from '@/core/TemperatureField';
 import { getLife, getVariant } from '@/core/types';
 import { registryArray } from '@/elements/registry';
 import { Camera } from './Camera';
+import { VisualLookups } from './VisualLookups';
 
 /**
- * Renderer: responsible only for drawing the grid to a canvas.
+ * Screen renderer.
  *
- * - paints the logical grid into an off-screen buffer (1 pixel per cell)
- * - blits that buffer to the main canvas via Camera transform
- *   (imageSmoothingEnabled = false keeps pixels crisp at any zoom)
- * - optionally overlays a temperature tint
+ * Pipeline per frame:
+ *   1. Per-cell pass — writes both the grid colour buffer and the bloom
+ *      buffer simultaneously (single iteration over 160k cells).
+ *   2. Grid blit — `putImageData` → `drawImage` through the camera.
+ *   3. Bloom composite — if any hot cell wrote to the bloom buffer,
+ *      blur-and-lighter it on top of the grid (Canvas2D filter is
+ *      GPU-accelerated on modern browsers).
+ *   4. Overlay hook — caller draws particles / brush cursor here.
+ *   5. Post-process — flash decay + vignette.
+ *
+ * The renderer never knows about the simulation order; it only reads the
+ * grid, the temperature field, and the per-cell element definition.
  */
 export class Renderer {
   private readonly buffer: ImageData;
   private readonly bufferCanvas: HTMLCanvasElement;
   private readonly bufferCtx: CanvasRenderingContext2D;
+  private readonly bloomBuffer: ImageData;
+  private readonly bloomCanvas: HTMLCanvasElement;
+  private readonly bloomCtx: CanvasRenderingContext2D;
   private readonly ctx: CanvasRenderingContext2D;
+  private flashIntensity = 0;
   public showTemperature = false;
 
   constructor(
@@ -24,6 +37,7 @@ export class Renderer {
     private readonly grid: Grid,
     private readonly field: TemperatureField,
     private readonly camera: Camera,
+    private readonly visualLookups: VisualLookups,
   ) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('2d context unavailable');
@@ -37,6 +51,19 @@ export class Renderer {
     if (!bctx) throw new Error('2d buffer context unavailable');
     this.bufferCtx = bctx;
     this.buffer = this.bufferCtx.createImageData(grid.width, grid.height);
+
+    this.bloomCanvas = document.createElement('canvas');
+    this.bloomCanvas.width = grid.width;
+    this.bloomCanvas.height = grid.height;
+    const blctx = this.bloomCanvas.getContext('2d', { alpha: true });
+    if (!blctx) throw new Error('2d bloom context unavailable');
+    this.bloomCtx = blctx;
+    this.bloomBuffer = this.bloomCtx.createImageData(grid.width, grid.height);
+  }
+
+  /** Exposed so overlays (particles, brush cursor) can draw on the same ctx. */
+  get context(): CanvasRenderingContext2D {
+    return this.ctx;
   }
 
   resize(cssWidth: number, cssHeight: number): { pixelW: number; pixelH: number } {
@@ -52,44 +79,57 @@ export class Renderer {
     return { pixelW, pixelH };
   }
 
-  /** Expose the visible ctx so overlays (particles, brush cursor) can draw. */
-  get context(): CanvasRenderingContext2D {
-    return this.ctx;
+  /** Fire off an explosion-white flash; decays over the next ~12 frames. */
+  kickFlash(intensity: number): void {
+    const capped = Math.min(1, Math.max(0, intensity));
+    if (capped > this.flashIntensity) this.flashIntensity = capped;
   }
 
-  render(shakeX = 0, shakeY = 0): void {
-    const { grid, buffer, field, showTemperature } = this;
+  /**
+   * Render the grid + bloom composite.
+   * Call this first, then draw overlays, then `renderPostProcess()`.
+   */
+  renderGrid(shakeX = 0, shakeY = 0): void {
+    const { grid, buffer, bloomBuffer, field, showTemperature, visualLookups } = this;
     const data = buffer.data;
+    const bloomData = bloomBuffer.data;
     const cells = grid.cells;
     const temps = field.temps;
     const n = cells.length;
     const registry = registryArray();
+    const bloomLookup = visualLookups.bloom;
+    const copperId = visualLookups.copperId;
+    const ironId = visualLookups.ironId;
+
+    let hasBloom = false;
 
     for (let i = 0; i < n; i++) {
       const cell = cells[i];
-      const id = cell & 0xfff; // inline getElement
+      const id = cell & 0xfff;
       const p = i * 4;
 
-      // Fast path: empty cells (typically majority of grid).
       if (id === 0) {
+        // Empty fast-path. Base ambient + optional thermal tint.
+        let r = 10;
+        let g = 10;
+        let b = 11;
         if (showTemperature) {
           const t = temps[i];
           if (t > 3 || t < -3) {
-            const { tr, tg, tb, alpha } = tempTint(t);
-            data[p] = clamp255(10 * (1 - alpha) + tr * alpha);
-            data[p + 1] = clamp255(10 * (1 - alpha) + tg * alpha);
-            data[p + 2] = clamp255(11 * (1 - alpha) + tb * alpha);
-          } else {
-            data[p] = 10;
-            data[p + 1] = 10;
-            data[p + 2] = 11;
+            const tint = tempTint(t);
+            r = clamp255(r * (1 - tint.a) + tint.r * tint.a);
+            g = clamp255(g * (1 - tint.a) + tint.g * tint.a);
+            b = clamp255(b * (1 - tint.a) + tint.b * tint.a);
           }
-        } else {
-          data[p] = 10;
-          data[p + 1] = 10;
-          data[p + 2] = 11;
         }
+        data[p] = r;
+        data[p + 1] = g;
+        data[p + 2] = b;
         data[p + 3] = 255;
+        bloomData[p] = 0;
+        bloomData[p + 1] = 0;
+        bloomData[p + 2] = 0;
+        bloomData[p + 3] = 0;
         continue;
       }
 
@@ -117,10 +157,10 @@ export class Renderer {
       if (showTemperature) {
         const t = temps[i];
         if (t > 3 || t < -3) {
-          const { tr, tg, tb, alpha } = tempTint(t);
-          r = clamp255(r * (1 - alpha) + tr * alpha);
-          g = clamp255(g * (1 - alpha) + tg * alpha);
-          b = clamp255(b * (1 - alpha) + tb * alpha);
+          const tint = tempTint(t);
+          r = clamp255(r * (1 - tint.a) + tint.r * tint.a);
+          g = clamp255(g * (1 - tint.a) + tint.g * tint.a);
+          b = clamp255(b * (1 - tint.a) + tint.b * tint.a);
         }
       }
 
@@ -128,40 +168,130 @@ export class Renderer {
       data[p + 1] = g;
       data[p + 2] = b;
       data[p + 3] = 255;
+
+      // Bloom contribution: static from lookup + dynamic for charged conductors.
+      let bAmt = bloomLookup[id];
+      if (life > 0 && (id === copperId || id === ironId)) {
+        const live = Math.min(1, life / 28);
+        if (live > bAmt) bAmt = live;
+      }
+
+      if (bAmt > 0) {
+        bloomData[p] = (r * bAmt) | 0;
+        bloomData[p + 1] = (g * bAmt) | 0;
+        bloomData[p + 2] = (b * bAmt) | 0;
+        bloomData[p + 3] = Math.min(255, (bAmt * 255) | 0);
+        hasBloom = true;
+      } else {
+        bloomData[p] = 0;
+        bloomData[p + 1] = 0;
+        bloomData[p + 2] = 0;
+        bloomData[p + 3] = 0;
+      }
     }
 
     this.bufferCtx.putImageData(buffer, 0, 0);
 
-    // Clear visible canvas, draw buffer via camera transform.
-    this.ctx.imageSmoothingEnabled = false;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.fillStyle = '#050506';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const ctx = this.ctx;
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.filter = 'none';
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#050506';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     const { offsetX, offsetY, zoom } = this.camera;
-    this.ctx.drawImage(
+    ctx.drawImage(
       this.bufferCanvas,
       0, 0, grid.width, grid.height,
-      offsetX + shakeX, offsetY + shakeY, grid.width * zoom, grid.height * zoom,
+      offsetX + shakeX, offsetY + shakeY,
+      grid.width * zoom, grid.height * zoom,
     );
+
+    if (hasBloom) {
+      this.bloomCtx.putImageData(bloomBuffer, 0, 0);
+      // Blur radius roughly tracks zoom so the glow reads as "~1.5 cells wide".
+      const blurPx = Math.max(4, Math.min(22, zoom * 1.5));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+      ctx.drawImage(
+        this.bloomCanvas,
+        0, 0, grid.width, grid.height,
+        offsetX + shakeX, offsetY + shakeY,
+        grid.width * zoom, grid.height * zoom,
+      );
+      // Double-draw with tighter blur for a crisp core.
+      ctx.filter = `blur(${Math.max(1.5, blurPx * 0.35).toFixed(2)}px)`;
+      ctx.drawImage(
+        this.bloomCanvas,
+        0, 0, grid.width, grid.height,
+        offsetX + shakeX, offsetY + shakeY,
+        grid.width * zoom, grid.height * zoom,
+      );
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  /** Apply flash + vignette on top of everything (call after overlays). */
+  renderPostProcess(): void {
+    const ctx = this.ctx;
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+
+    if (this.flashIntensity > 0) {
+      ctx.fillStyle = `rgba(255,240,220,${this.flashIntensity.toFixed(3)})`;
+      ctx.fillRect(0, 0, cw, ch);
+      this.flashIntensity = Math.max(0, this.flashIntensity - 0.08);
+    }
+
+    // Soft vignette — cheap once per frame.
+    const cx = cw / 2;
+    const cy = ch / 2;
+    const inner = Math.min(cw, ch) * 0.28;
+    const outer = Math.max(cw, ch) * 0.78;
+    const grd = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+    grd.addColorStop(0, 'rgba(0,0,0,0)');
+    grd.addColorStop(1, 'rgba(0,0,0,0.42)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  /** @deprecated use renderGrid + renderPostProcess. Kept for back-compat. */
+  render(shakeX = 0, shakeY = 0): void {
+    this.renderGrid(shakeX, shakeY);
+    this.renderPostProcess();
   }
 }
 
 const clamp255 = (v: number): number => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 
 /**
- * Map a temperature value to a tint color + alpha.
- * Cold → pale blue, warm → amber, hot → red-orange.
+ * Smoother temperature tint using an eased ramp.
+ * Cold → pale blue, warm → amber, hot → red-orange, very hot → white-hot.
  */
-const tempTint = (t: number): { tr: number; tg: number; tb: number; alpha: number } => {
+const tempTint = (t: number): { r: number; g: number; b: number; a: number } => {
   if (t >= 10) {
-    // warm → hot ramp: 10 -> faint, 120 -> strong red
     const n = Math.min(1, (t - 10) / 110);
-    return { tr: 255, tg: Math.round(180 * (1 - n)), tb: 20, alpha: 0.15 + n * 0.45 };
+    // lerp: amber (255, 180, 20) → red-orange (255, 70, 10) → near-white core (255, 230, 200)
+    let r = 255;
+    let g = Math.round(180 * (1 - n) + 230 * Math.pow(n, 2));
+    let b = Math.round(20 * (1 - n) + 200 * Math.pow(n, 3));
+    // Pull back toward amber for mid values
+    if (n < 0.7) {
+      g = Math.round(180 - n * 110);
+      b = Math.round(20 - n * 10);
+    }
+    const a = 0.15 + Math.pow(n, 0.6) * 0.5;
+    return { r, g, b, a };
   }
   if (t <= -10) {
     const n = Math.min(1, Math.abs(t + 10) / 100);
-    return { tr: 140, tg: 180, tb: 255, alpha: 0.15 + n * 0.5 };
+    const r = Math.round(140 - n * 50);
+    const g = Math.round(180 - n * 30);
+    const b = Math.round(255);
+    const a = 0.15 + Math.pow(n, 0.6) * 0.55;
+    return { r, g, b, a };
   }
-  return { tr: 0, tg: 0, tb: 0, alpha: 0 };
+  return { r: 0, g: 0, b: 0, a: 0 };
 };

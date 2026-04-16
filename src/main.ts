@@ -12,6 +12,7 @@ import { registryArray } from './elements/registry';
 import { Renderer } from './rendering/Renderer';
 import { Camera } from './rendering/Camera';
 import { drawBrushCursor } from './rendering/BrushCursor';
+import { buildVisualLookups } from './rendering/VisualLookups';
 import { InputController } from './input/InputController';
 import { Sidebar } from './ui/Sidebar';
 import { Topbar } from './ui/Topbar';
@@ -76,6 +77,7 @@ const bootstrap = () => {
           gravity: -0.015,
         });
         shake.kick(e.radius * 4);
+        renderer.kickFlash(Math.min(0.65, 0.12 + e.radius * 0.025));
         break;
       case 'ignition':
         particles.spawn(e.x, e.y, {
@@ -124,7 +126,14 @@ const bootstrap = () => {
 
   const canvas = document.getElementById('sim') as HTMLCanvasElement;
   const camera = new Camera(gridW, gridH);
-  const renderer = new Renderer(canvas, simulation.grid, simulation.field, camera);
+  const visualLookups = buildVisualLookups(registryArray());
+  const renderer = new Renderer(
+    canvas,
+    simulation.grid,
+    simulation.field,
+    camera,
+    visualLookups,
+  );
 
   const syncCameraState = () => {
     const dpr = window.devicePixelRatio || 1;
@@ -219,9 +228,12 @@ const bootstrap = () => {
     shake.update();
     particles.update();
 
-    renderer.render(shake.offsetX, shake.offsetY);
+    // Grid + bloom, overlays, then post-process — in that order so
+    // the vignette and flash sit on top of particles and the cursor.
+    renderer.renderGrid(shake.offsetX, shake.offsetY);
     particles.draw(renderer.context, camera);
     drawBrushCursor(renderer.context, camera, input.cursor, shake.offsetX, shake.offsetY);
+    renderer.renderPostProcess();
 
     frames++;
     if (now - fpsTimer >= 500) {
