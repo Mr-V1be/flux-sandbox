@@ -7,20 +7,29 @@ import { VisualLookups } from './VisualLookups';
 import { HeatMode } from '@/state/Store';
 
 // ─── heat-map palette ──────────────────────────────────────────────────
-// Inferno-style ramp precomputed once at module load into a 256×3 byte
-// array. Key colour stops chosen to read like a thermal imaging camera:
-// near-black ambient → deep purple cold → magenta mid → amber / white hot.
+// Centre-weighted "coolwarm" ramp — scientific convention and the only
+// way the eye can separate hot / cold / neutral at a glance:
+//   t = -128  deep navy        (very cold)
+//   t =  -60  blue
+//   t =  -10  light cyan
+//   t =    0  near-white       (ambient, reads as "nothing")
+//   t =  +15  pale amber
+//   t =  +60  orange
+//   t = +100  deep red
+//   t = +127  white-hot        (over-hot)
 const HEATMAP_STOPS: Array<[number, number, number, number]> = [
-  [0.00, 4, 0, 12],
-  [0.12, 20, 4, 50],
-  [0.24, 60, 14, 100],
-  [0.36, 120, 28, 120],
-  [0.48, 190, 50, 110],
-  [0.58, 230, 80, 70],
-  [0.68, 250, 130, 40],
-  [0.78, 255, 180, 40],
-  [0.88, 255, 220, 120],
-  [1.00, 252, 252, 240],
+  [0.00, 6, 10, 50],
+  [0.15, 28, 58, 170],
+  [0.30, 70, 140, 220],
+  [0.42, 150, 200, 240],
+  [0.48, 220, 235, 248],
+  [0.501, 250, 248, 240],
+  [0.52, 255, 230, 200],
+  [0.58, 255, 200, 140],
+  [0.66, 255, 160, 70],
+  [0.76, 250, 100, 30],
+  [0.88, 200, 30, 25],
+  [1.00, 255, 240, 210],
 ];
 
 const HEATMAP_LUT = (() => {

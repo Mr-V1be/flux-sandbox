@@ -8,7 +8,7 @@ import {
   computeGridSize,
 } from './core/constants';
 import { registerAllElements } from './elements/definitions';
-import { getDefinitionByKey, registryArray } from './elements/registry';
+import { getDefinitionByKey, getIdByKey, registryArray } from './elements/registry';
 import { Renderer } from './rendering/Renderer';
 import { Camera } from './rendering/Camera';
 import { drawBrushCursor } from './rendering/BrushCursor';
@@ -175,6 +175,7 @@ const bootstrap = () => {
   );
   mountHelpOverlay(document.getElementById('help') as HTMLElement);
 
+  const emptyId = getIdByKey('empty');
   store.subscribe((s, prev) => {
     if (s.heatMode !== prev.heatMode) renderer.heatMode = s.heatMode;
     if (s.drawerOpen !== prev.drawerOpen) {
@@ -187,6 +188,23 @@ const bootstrap = () => {
       const def = getDefinitionByKey(s.selectedKey);
       const spawn = def?.thermal?.spawnTemp ?? DEFAULT_PAINT_TEMP;
       if (spawn !== s.paintTemp) store.getState().setPaintTemp(spawn);
+    }
+    // Manual slider drag flows into ambient — shifts the world's air
+    // temperature so the heat-map reflects the slider immediately AND
+    // materials that brush past unaffected air now see a warmed / chilled
+    // room. Empty cells are snapped to the new ambient in-place because
+    // the gentle emit drift is sub-integer per tick and would round to
+    // zero in the Int8 temperature field.
+    if (s.ambientTemp !== prev.ambientTemp) {
+      const clamped =
+        s.ambientTemp < -128 ? -128 : s.ambientTemp > 127 ? 127 : s.ambientTemp | 0;
+      simulation.lookups.emitTemp[emptyId] = clamped;
+      const cells = simulation.grid.cells;
+      const temps = simulation.field.temps;
+      for (let i = 0; i < cells.length; i++) {
+        if ((cells[i] & 0xfff) === emptyId) temps[i] = clamped;
+      }
+      simulation.grid.wakeAll();
     }
   });
 

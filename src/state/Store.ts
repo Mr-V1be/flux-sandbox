@@ -17,6 +17,11 @@ export interface UiState {
   brushSize: number;
   brushShape: BrushShape;
   paintTemp: number;
+  /**
+   * World ambient air temperature. Drives `empty.emitTemp` at runtime;
+   * updated only on manual slider drags, not on element auto-sync.
+   */
+  ambientTemp: number;
   paused: boolean;
   fps: number;
   activeCells: number;
@@ -30,6 +35,13 @@ export interface UiState {
   setBrushShape(shape: BrushShape): void;
   cycleBrushShape(): void;
   setPaintTemp(temp: number): void;
+  /**
+   * Same as setPaintTemp, but flagged as a user-driven slider drag so
+   * the simulation can sync the world's ambient air temperature to it.
+   * Auto-sync on element select uses setPaintTemp, not this — the air
+   * shouldn't change just because you clicked "Lava".
+   */
+  setPaintTempManual(temp: number): void;
   resetPaintTemp(): void;
   togglePause(): void;
   cycleHeatMode(): void;
@@ -44,6 +56,7 @@ export const store = createStore<UiState>((set) => ({
   brushSize: 6,
   brushShape: 'circle',
   paintTemp: DEFAULT_PAINT_TEMP,
+  ambientTemp: 0,
   paused: false,
   fps: 0,
   activeCells: 0,
@@ -66,7 +79,14 @@ export const store = createStore<UiState>((set) => ({
         Math.min(PAINT_TEMP_MAX, Math.round(temp)),
       ),
     }),
-  resetPaintTemp: () => set({ paintTemp: DEFAULT_PAINT_TEMP }),
+  setPaintTempManual: (temp) => {
+    const clamped = Math.max(
+      PAINT_TEMP_MIN,
+      Math.min(PAINT_TEMP_MAX, Math.round(temp)),
+    );
+    set({ paintTemp: clamped, ambientTemp: clamped });
+  },
+  resetPaintTemp: () => set({ paintTemp: DEFAULT_PAINT_TEMP, ambientTemp: 0 }),
   togglePause: () => set((s) => ({ paused: !s.paused })),
   cycleHeatMode: () =>
     set((s) => ({

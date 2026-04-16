@@ -200,7 +200,9 @@ export class Topbar {
       store.getState().setBrush(Number(this.brushSlider.value));
     });
     this.tempSlider.addEventListener('input', () => {
-      store.getState().setPaintTemp(Number(this.tempSlider.value));
+      // Manual drag also nudges world ambient so the heat-map view
+      // visually reflects the slider immediately.
+      store.getState().setPaintTempManual(Number(this.tempSlider.value));
     });
     // Double-click the thermometer or the slider to snap back to ambient.
     this.tempSlider.addEventListener('dblclick', () => store.getState().resetPaintTemp());
