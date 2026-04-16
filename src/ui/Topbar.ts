@@ -425,9 +425,11 @@ export class Topbar {
         <div class="text-neutral-500 text-[10px] mt-0.5">${s.description}</div>
       `;
       item.addEventListener('click', () => {
-        s.apply(this.grid);
+        // `apply` itself clears grid + field and stamps the right spawn
+        // temperature on every cell it places, so lava spawns hot, cryo
+        // spawns liquid-nitrogen cold, torch spawns glowing, etc.
+        s.apply(this.grid, this.field);
         this.grid.wakeAll();
-        this.field.clear();
         panel.classList.add('hidden');
       });
       panel.appendChild(item);

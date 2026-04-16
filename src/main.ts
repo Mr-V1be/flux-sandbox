@@ -26,6 +26,7 @@ import { EventBus } from './effects/EventBus';
 import { ParticleSystem } from './effects/Particles';
 import { ScreenShake } from './effects/ScreenShake';
 import { deserialize } from './state/Serializer';
+import { scenarios } from './state/Scenarios';
 import { showToast } from './ui/Toast';
 
 /**
@@ -287,6 +288,14 @@ const bootstrap = () => {
         if (reg[i]?.key === key) return i;
       }
       return -1;
+    },
+    /** Load a named scenario into the live grid — exposed for e2e. */
+    loadScenario: (id: string): boolean => {
+      const s = scenarios.find((sc) => sc.id === id);
+      if (!s) return false;
+      s.apply(simulation.grid, simulation.field);
+      simulation.grid.wakeAll();
+      return true;
     },
     /** Stamp one cell using the real paint-path spawn-temp logic. */
     paintDot: (key: string, x: number, y: number): void => {
