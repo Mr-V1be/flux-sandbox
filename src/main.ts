@@ -103,16 +103,19 @@ const bootstrap = () => {
   // ─── Simulation + view ─────────────────────────────────────────────
   // Size the grid so its aspect matches the actual stage the user has
   // right now (portrait phone, landscape desktop, ultrawide, …) under a
-  // per-device cell-count budget. This fills the canvas with no letterboxing.
+  // per-device cell-count budget. We derive from window dimensions minus
+  // the known chrome (topbar + footer + sidebar on desktop) because
+  // `stage.clientHeight` may be zero before the flex layout settles.
   const stage = document.getElementById('stage') as HTMLElement;
   const isSmallDevice =
     window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
   const budget = isSmallDevice ? CELL_BUDGET_MOBILE : CELL_BUDGET_DESKTOP;
-  const { w: gridW, h: gridH } = computeGridSize(
-    stage.clientWidth,
-    stage.clientHeight,
-    budget,
-  );
+  const TOPBAR_H = 48;
+  const FOOTER_H = 32;
+  const SIDEBAR_W = 240;
+  const availableW = window.innerWidth - (isSmallDevice ? 0 : SIDEBAR_W);
+  const availableH = window.innerHeight - TOPBAR_H - FOOTER_H;
+  const { w: gridW, h: gridH } = computeGridSize(availableW, availableH, budget);
 
   const simulation = new Simulation(
     { width: gridW, height: gridH, seed: Date.now() & 0xffffffff, bus },

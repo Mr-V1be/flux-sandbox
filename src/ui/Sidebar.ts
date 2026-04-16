@@ -48,6 +48,13 @@ export class Sidebar {
     this.mountTooltip();
     store.subscribe((s, prev) => {
       if (s.selectedKey !== prev.selectedKey) this.updateSelection(s.selectedKey);
+      // When the drawer closes on mobile, clear any lingering tooltip so it
+      // doesn't hover over the canvas.
+      if (prev.drawerOpen && !s.drawerOpen) this.hideAnyTooltip();
+    });
+    // Tapping anywhere outside the sidebar dismisses the tooltip.
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.root.contains(e.target as Node)) this.hideAnyTooltip();
     });
     this.updateSelection(store.getState().selectedKey);
   }
@@ -131,13 +138,19 @@ export class Sidebar {
 
     btn.addEventListener('click', () => {
       store.getState().setSelected(el.key);
+      this.hideAnyTooltip();
       // Auto-close the drawer on mobile after picking an element.
       if (window.matchMedia('(max-width: 767px)').matches) {
         store.getState().setDrawerOpen(false);
       }
     });
-    btn.addEventListener('mouseenter', () => this.showTooltip(el, btn));
-    btn.addEventListener('mouseleave', () => this.hideTooltip(el.key));
+    // Only show the recipes tooltip on real hover (mouse / pen). Touch is
+    // too noisy — enter fires on tap but leave may never come.
+    btn.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'touch') return;
+      this.showTooltip(el, btn);
+    });
+    btn.addEventListener('pointerleave', () => this.hideTooltip(el.key));
     return btn;
   }
 
@@ -191,6 +204,12 @@ export class Sidebar {
 
   private hideTooltip(key: string): void {
     if (this.tooltipTarget !== key) return;
+    this.tooltipTarget = null;
+    this.tooltip.style.opacity = '0';
+  }
+
+  /** Unconditionally dismiss any visible tooltip. */
+  private hideAnyTooltip(): void {
     this.tooltipTarget = null;
     this.tooltip.style.opacity = '0';
   }

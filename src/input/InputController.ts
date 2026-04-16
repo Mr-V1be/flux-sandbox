@@ -382,13 +382,18 @@ export class InputController {
         const y = cy + dy;
         if (!this.grid.inBounds(x, y)) continue;
 
-        if (shape === 'replace' && !erasing) {
-          // Only paint where a non-empty cell exists (and not the same element).
-          const existing = getElement(this.grid.get(x, y));
-          if (existing === 0 || existing === id) continue;
-        }
+        const existing = getElement(this.grid.get(x, y));
 
-        if (shape !== 'replace' && !sparsePick()) continue;
+        if (erasing) {
+          // Eraser always runs (writes EMPTY_ID).
+        } else if (shape === 'replace') {
+          // Replace: only overwrite existing non-empty cells (and not self).
+          if (existing === 0 || existing === id) continue;
+        } else {
+          // Normal painting never overwrites existing matter — additive only.
+          if (existing !== 0) continue;
+          if (!sparsePick()) continue;
+        }
 
         const variant = (Math.random() * 255) | 0;
         this.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, variant));
