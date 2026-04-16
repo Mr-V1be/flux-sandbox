@@ -23,9 +23,9 @@ import {
 } from 'lucide';
 import {
   BrushShape,
-  DEFAULT_PAINT_TEMP,
-  PAINT_TEMP_MAX,
-  PAINT_TEMP_MIN,
+  DEFAULT_AMBIENT_TEMP,
+  AMBIENT_TEMP_MAX,
+  AMBIENT_TEMP_MIN,
   store,
 } from '@/state/Store';
 import { Grid } from '@/core/Grid';
@@ -140,12 +140,12 @@ export class Topbar {
         </div>
 
         <div class="flex items-center gap-2 ml-3 pl-3 border-l border-neutral-800/70 temp-cluster"
-             title="Paint temperature (double-click slider to reset to 20°)">
+             title="Ambient air temperature (double-click to reset to 0°). Materials keep their own natural temperature.">
           <i data-lucide="thermometer" class="h-3.5 w-3.5"></i>
-          <input type="range" min="${PAINT_TEMP_MIN}" max="${PAINT_TEMP_MAX}"
-            value="${DEFAULT_PAINT_TEMP}" step="1" data-ctrl="temp"
+          <input type="range" min="${AMBIENT_TEMP_MIN}" max="${AMBIENT_TEMP_MAX}"
+            value="${DEFAULT_AMBIENT_TEMP}" step="1" data-ctrl="temp"
             class="accent-neutral-200 w-24 h-1" />
-          <span data-out="temp" class="text-xs text-neutral-400 tabular-nums w-9 text-right">${DEFAULT_PAINT_TEMP}°</span>
+          <span data-out="temp" class="text-xs text-neutral-400 tabular-nums w-9 text-right">${DEFAULT_AMBIENT_TEMP}°</span>
         </div>
 
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">
@@ -200,13 +200,11 @@ export class Topbar {
       store.getState().setBrush(Number(this.brushSlider.value));
     });
     this.tempSlider.addEventListener('input', () => {
-      // Manual drag also nudges world ambient so the heat-map view
-      // visually reflects the slider immediately.
-      store.getState().setPaintTempManual(Number(this.tempSlider.value));
+      store.getState().setAmbientTemp(Number(this.tempSlider.value));
     });
-    // Double-click the thermometer or the slider to snap back to ambient.
-    this.tempSlider.addEventListener('dblclick', () => store.getState().resetPaintTemp());
-    this.tempLabel.addEventListener('dblclick', () => store.getState().resetPaintTemp());
+    // Double-click the thermometer or the slider to snap back to neutral.
+    this.tempSlider.addEventListener('dblclick', () => store.getState().resetAmbientTemp());
+    this.tempLabel.addEventListener('dblclick', () => store.getState().resetAmbientTemp());
 
     (this.root.querySelector('[data-act="zoom-in"]') as HTMLElement).addEventListener(
       'click',
@@ -470,13 +468,13 @@ export class Topbar {
     store.subscribe((s) => {
       this.brushSlider.value = String(s.brushSize);
       this.brushLabel.textContent = String(s.brushSize);
-      this.tempSlider.value = String(s.paintTemp);
-      this.tempLabel.textContent = `${s.paintTemp}°`;
+      this.tempSlider.value = String(s.ambientTemp);
+      this.tempLabel.textContent = `${s.ambientTemp}°`;
       // Colour the readout: blue cold, neutral warm, amber hot.
       this.tempLabel.style.color =
-        s.paintTemp >= 60
+        s.ambientTemp >= 60
           ? '#ffb06a'
-          : s.paintTemp <= -10
+          : s.ambientTemp <= -10
             ? '#8ac8ff'
             : '#a1a1aa';
       this.fpsEl.textContent = s.fps.toFixed(0);

@@ -9,6 +9,8 @@ import {
 } from './core/constants';
 import { registerAllElements } from './elements/definitions';
 import { getDefinitionByKey, getIdByKey, registryArray } from './elements/registry';
+import { resolveSpawnTemp } from './core/spawnTemp';
+import { encode } from './core/types';
 import { Renderer } from './rendering/Renderer';
 import { Camera } from './rendering/Camera';
 import { drawBrushCursor } from './rendering/BrushCursor';
@@ -23,7 +25,6 @@ import { EventBus } from './effects/EventBus';
 import { ParticleSystem } from './effects/Particles';
 import { ScreenShake } from './effects/ScreenShake';
 import { deserialize } from './state/Serializer';
-import { DEFAULT_PAINT_TEMP } from './state/Store';
 import { showToast } from './ui/Toast';
 
 /**
@@ -181,20 +182,11 @@ const bootstrap = () => {
     if (s.drawerOpen !== prev.drawerOpen) {
       document.body.dataset.drawerOpen = s.drawerOpen ? 'true' : 'false';
     }
-    // Auto-sync the paint-temperature slider to each element's natural
-    // spawn temperature. Lava arrives at 110°, ice at −20°, water at
-    // 10°, etc. User can still override by dragging the slider.
-    if (s.selectedKey !== prev.selectedKey) {
-      const def = getDefinitionByKey(s.selectedKey);
-      const spawn = def?.thermal?.spawnTemp ?? DEFAULT_PAINT_TEMP;
-      if (spawn !== s.paintTemp) store.getState().setPaintTemp(spawn);
-    }
-    // Manual slider drag flows into ambient — shifts the world's air
-    // temperature so the heat-map reflects the slider immediately AND
-    // materials that brush past unaffected air now see a warmed / chilled
-    // room. Empty cells are snapped to the new ambient in-place because
-    // the gentle emit drift is sub-integer per tick and would round to
-    // zero in the Int8 temperature field.
+    // The slider is ambient-only: it shifts the world's air temperature
+    // so the heat-map reflects it immediately and materials brushing
+    // past unaffected air see a warmed / chilled room. Empty cells are
+    // snapped to the new ambient in-place because the gentle emit drift
+    // is sub-integer per tick and would round to zero in the Int8 field.
     if (s.ambientTemp !== prev.ambientTemp) {
       const clamped =
         s.ambientTemp < -128 ? -128 : s.ambientTemp > 127 ? 127 : s.ambientTemp | 0;
@@ -287,12 +279,22 @@ const bootstrap = () => {
     simulation,
     store,
     getIdByKey: (key: string) => {
-      // Lazy import to avoid a cycle during bootstrap.
       const reg = registryArray();
       for (let i = 0; i < reg.length; i++) {
         if (reg[i]?.key === key) return i;
       }
       return -1;
+    },
+    /** Stamp one cell using the real paint-path spawn-temp logic. */
+    paintDot: (key: string, x: number, y: number): void => {
+      const def = getDefinitionByKey(key);
+      if (!def) return;
+      const id = getIdByKey(key);
+      if (id < 0) return;
+      const spawnTemp = resolveSpawnTemp(def, store.getState().ambientTemp);
+      simulation.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, 0));
+      simulation.field.set(x, y, spawnTemp);
+      simulation.grid.wake(x, y);
     },
   };
 };

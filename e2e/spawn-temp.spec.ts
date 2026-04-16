@@ -1,95 +1,90 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Each material should spawn at its natural temperature regardless of
- * the world's ambient 0°. Lava arrives molten, ice arrives frozen,
- * cryo arrives liquid-nitrogen cold.
+ * Materials spawn at their natural temperature regardless of the
+ * ambient slider, and materials without one inherit the ambient.
+ * The paint pipeline is driven through the exposed flux.paintDot
+ * helper so the real resolveSpawnTemp logic is exercised.
  */
-test('selecting an element syncs paint-temp to its natural spawn temperature', async ({ page }) => {
+test('paintDot stamps each element at its natural temperature', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => (window as unknown as { flux?: unknown }).flux, {
     timeout: 15_000,
   });
 
-  const probe = async (key: string) => {
-    return await page.evaluate(
-      ({ key }) => {
+  const probe = async (key: string, x: number, y: number) =>
+    page.evaluate(
+      ({ key, x, y }) => {
         const f = (window as unknown as {
           flux: {
-            store: {
-              getState: () => { paintTemp: number; setSelected: (k: string) => void };
-            };
+            paintDot: (k: string, x: number, y: number) => void;
+            simulation: { field: { get: (x: number, y: number) => number } };
           };
         }).flux;
-        f.store.getState().setSelected(key);
-        return f.store.getState().paintTemp;
+        f.paintDot(key, x, y);
+        return f.simulation.field.get(x, y);
       },
-      { key },
+      { key, x, y },
     );
-  };
 
-  expect(await probe('lava')).toBe(110);
-  expect(await probe('fire')).toBe(85);
-  expect(await probe('torch')).toBe(120);
-  expect(await probe('ice')).toBe(-20);
-  expect(await probe('snow')).toBe(-10);
-  expect(await probe('cryo')).toBe(-80);
-  expect(await probe('steam')).toBe(95);
-  expect(await probe('water')).toBe(10);
-  expect(await probe('uranium')).toBe(30);
-  expect(await probe('sand')).toBe(20); // no spawnTemp → default 20
-  expect(await probe('stone')).toBe(20);
-  expect(await probe('wood')).toBe(20);
+  expect(await probe('lava', 10, 10)).toBe(110);
+  expect(await probe('fire', 12, 10)).toBe(85);
+  expect(await probe('torch', 14, 10)).toBe(120);
+  expect(await probe('ice', 16, 10)).toBe(-20);
+  expect(await probe('snow', 18, 10)).toBe(-10);
+  expect(await probe('cryo', 20, 10)).toBe(-80);
+  expect(await probe('steam', 22, 10)).toBe(95);
+  expect(await probe('water', 24, 10)).toBe(10);
 });
 
-test('freshly painted lava actually starts hot and cools over time', async ({ page }) => {
+test('materials without spawnTemp inherit the ambient slider', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => (window as unknown as { flux?: unknown }).flux, {
     timeout: 15_000,
   });
 
-  // Select lava (paintTemp should auto-sync to 110) then paint a patch.
-  const sandwichedTemp = await page.evaluate(() => {
+  // Ambient 0 → sand spawns at 0.
+  const cold = await page.evaluate(() => {
     const f = (window as unknown as {
       flux: {
-        store: {
-          getState: () => {
-            paintTemp: number;
-            paused: boolean;
-            setSelected: (k: string) => void;
-            togglePause: () => void;
-          };
-        };
-        simulation: {
-          grid: { width: number; height: number; set: (x: number, y: number, c: number) => void };
-          field: { set: (x: number, y: number, t: number) => void; get: (x: number, y: number) => number };
-        };
-        getIdByKey: (k: string) => number;
+        paintDot: (k: string, x: number, y: number) => void;
+        simulation: { field: { get: (x: number, y: number) => number } };
+        store: { getState: () => { setAmbientTemp: (t: number) => void } };
       };
     }).flux;
-    const s = f.store.getState();
-    s.setSelected('lava');
-    if (!s.paused) s.togglePause();
-
-    const autoTemp = f.store.getState().paintTemp;
-    const lavaId = f.getIdByKey('lava');
-    const wallId = f.getIdByKey('wall');
-
-    const cx = (f.simulation.grid.width / 2) | 0;
-    const cy = (f.simulation.grid.height / 2) | 0;
-    // Wall containment so lava can't drift out before we sample it.
-    for (let dx = -4; dx <= 4; dx++) {
-      f.simulation.grid.set(cx + dx, cy + 2, wallId & 0xfff);
-    }
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 1; dy++) {
-        f.simulation.grid.set(cx + dx, cy + dy, lavaId & 0xfff);
-        f.simulation.field.set(cx + dx, cy + dy, autoTemp);
-      }
-    }
-    return { autoTemp, lavaTemp: f.simulation.field.get(cx, cy) };
+    f.store.getState().setAmbientTemp(0);
+    f.paintDot('sand', 30, 30);
+    return f.simulation.field.get(30, 30);
   });
+  expect(cold).toBe(0);
 
-  expect(sandwichedTemp.autoTemp).toBe(110);
-  expect(sandwichedTemp.lavaTemp).toBe(110);
+  // Ambient 55 → fresh sand spawns at 55.
+  const warm = await page.evaluate(() => {
+    const f = (window as unknown as {
+      flux: {
+        paintDot: (k: string, x: number, y: number) => void;
+        simulation: { field: { get: (x: number, y: number) => number } };
+        store: { getState: () => { setAmbientTemp: (t: number) => void } };
+      };
+    }).flux;
+    f.store.getState().setAmbientTemp(55);
+    f.paintDot('sand', 32, 30);
+    return f.simulation.field.get(32, 30);
+  });
+  expect(warm).toBe(55);
+
+  // But lava still spawns at 110 regardless of a cold ambient.
+  const lava = await page.evaluate(() => {
+    const f = (window as unknown as {
+      flux: {
+        paintDot: (k: string, x: number, y: number) => void;
+        simulation: { field: { get: (x: number, y: number) => number } };
+        store: { getState: () => { setAmbientTemp: (t: number) => void } };
+      };
+    }).flux;
+    f.store.getState().setAmbientTemp(-50);
+    f.paintDot('lava', 34, 30);
+    return f.simulation.field.get(34, 30);
+  });
+  expect(lava).toBe(110);
 });

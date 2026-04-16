@@ -1,6 +1,7 @@
 import { Grid } from '@/core/Grid';
 import { TemperatureField } from '@/core/TemperatureField';
 import { encode, getElement } from '@/core/types';
+import { resolveSpawnTemp } from '@/core/spawnTemp';
 import {
   getDefinitionByKey,
   getIdByKey,
@@ -287,9 +288,6 @@ export class InputController {
     const def = registryArray()[id];
     if (def && def.key !== 'empty') {
       store.getState().setSelected(def.key);
-      // Also sample the cell's current temperature so building onto the
-      // same material preserves its thermal state.
-      store.getState().setPaintTemp(this.field.get(x, y));
     }
   }
 
@@ -364,6 +362,10 @@ export class InputController {
     const id = getIdByKey(keyToUse);
     const radius = Math.max(0, Math.floor(state.brushSize / 2));
     const r2 = radius * radius;
+    // A fresh cell picks up its element's natural spawn temperature
+    // (lava 110°, ice −20°, …) or falls back to the room ambient for
+    // elements without an intrinsic temperature (sand, stone, wood, …).
+    const spawnTemp = resolveSpawnTemp(def, state.ambientTemp);
 
     const sparsePick = (): boolean => {
       if (erasing) return true;
@@ -399,23 +401,12 @@ export class InputController {
         } else {
           // Normal painting never overwrites existing matter — additive only.
           if (existing !== 0) continue;
-          if (!sparsePick()) {
-            // The brush footprint is intentionally porous for powders /
-            // liquids / gases / special elements, but the *temperature*
-            // should still read as the user intends. Stamp it on skipped
-            // cells too so a "cold stroke" leaves a visible cold halo
-            // in the brush area instead of requiring the user to also
-            // drag the eraser.
-            this.field.set(x, y, state.paintTemp);
-            continue;
-          }
+          if (!sparsePick()) continue;
         }
 
         const variant = (Math.random() * 255) | 0;
         this.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, variant));
-        // Stamp the brush's current paint temperature onto the cell —
-        // for fresh matter, for replaced cells, and for erased cells too.
-        this.field.set(x, y, state.paintTemp);
+        this.field.set(x, y, spawnTemp);
       }
     }
   }

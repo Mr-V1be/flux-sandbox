@@ -7,19 +7,21 @@ export const BRUSH_SHAPES: BrushShape[] = ['circle', 'square', 'spray', 'line', 
 export type HeatMode = 'off' | 'tint' | 'heatmap';
 export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap'];
 
-/** Default ambient painting temperature (°). */
-export const DEFAULT_PAINT_TEMP = 20;
-export const PAINT_TEMP_MIN = -100;
-export const PAINT_TEMP_MAX = 127;
+/** Default ambient air temperature (°) — 0 reads neutral on the heat-map. */
+export const DEFAULT_AMBIENT_TEMP = 0;
+export const AMBIENT_TEMP_MIN = -100;
+export const AMBIENT_TEMP_MAX = 127;
 
 export interface UiState {
   selectedKey: string;
   brushSize: number;
   brushShape: BrushShape;
-  paintTemp: number;
   /**
-   * World ambient air temperature. Drives `empty.emitTemp` at runtime;
-   * updated only on manual slider drags, not on element auto-sync.
+   * World ambient air temperature — the *only* thing the temperature
+   * slider controls. Every empty cell is snapped to this, and painted
+   * materials without a natural spawn temperature (sand, stone, …)
+   * inherit it. Materials with a natural spawnTemp (lava 110°, ice
+   * −20°, …) ignore this and keep their intrinsic temperature.
    */
   ambientTemp: number;
   paused: boolean;
@@ -34,15 +36,8 @@ export interface UiState {
   setBrush(size: number): void;
   setBrushShape(shape: BrushShape): void;
   cycleBrushShape(): void;
-  setPaintTemp(temp: number): void;
-  /**
-   * Same as setPaintTemp, but flagged as a user-driven slider drag so
-   * the simulation can sync the world's ambient air temperature to it.
-   * Auto-sync on element select uses setPaintTemp, not this — the air
-   * shouldn't change just because you clicked "Lava".
-   */
-  setPaintTempManual(temp: number): void;
-  resetPaintTemp(): void;
+  setAmbientTemp(temp: number): void;
+  resetAmbientTemp(): void;
   togglePause(): void;
   cycleHeatMode(): void;
   setHeatMode(mode: HeatMode): void;
@@ -55,8 +50,7 @@ export const store = createStore<UiState>((set) => ({
   selectedKey: 'sand',
   brushSize: 6,
   brushShape: 'circle',
-  paintTemp: DEFAULT_PAINT_TEMP,
-  ambientTemp: 0,
+  ambientTemp: DEFAULT_AMBIENT_TEMP,
   paused: false,
   fps: 0,
   activeCells: 0,
@@ -72,21 +66,14 @@ export const store = createStore<UiState>((set) => ({
     set((s) => ({
       brushShape: BRUSH_SHAPES[(BRUSH_SHAPES.indexOf(s.brushShape) + 1) % BRUSH_SHAPES.length],
     })),
-  setPaintTemp: (temp) =>
+  setAmbientTemp: (temp) =>
     set({
-      paintTemp: Math.max(
-        PAINT_TEMP_MIN,
-        Math.min(PAINT_TEMP_MAX, Math.round(temp)),
+      ambientTemp: Math.max(
+        AMBIENT_TEMP_MIN,
+        Math.min(AMBIENT_TEMP_MAX, Math.round(temp)),
       ),
     }),
-  setPaintTempManual: (temp) => {
-    const clamped = Math.max(
-      PAINT_TEMP_MIN,
-      Math.min(PAINT_TEMP_MAX, Math.round(temp)),
-    );
-    set({ paintTemp: clamped, ambientTemp: clamped });
-  },
-  resetPaintTemp: () => set({ paintTemp: DEFAULT_PAINT_TEMP, ambientTemp: 0 }),
+  resetAmbientTemp: () => set({ ambientTemp: DEFAULT_AMBIENT_TEMP }),
   togglePause: () => set((s) => ({ paused: !s.paused })),
   cycleHeatMode: () =>
     set((s) => ({
