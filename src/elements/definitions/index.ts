@@ -67,10 +67,9 @@ import {
  *   0.045  stone, coal
  *   0.040  water, acid, glass, obsidian, radiation, portals, poison, nitro, napalm
  *   0.030  sand, mud, salt, gunpowder, wick, waxliq, steam, tar
- *   0.020  wood, ash, dust, plant, honey, wax, helium, antigravity, blackhole
- *   0.015  smoke, gas, chlorine, co2, methane, foam, glue, fan, void, storm cloud
+ *   0.020  empty (air), wood, ash, dust, plant, honey, wax, helium, antigravity
+ *   0.015  smoke, gas, chlorine, co2, methane, glue, fan, void, storm cloud
  *   0.010  cloner, oxygen
- *   0.008  empty (air)
  *   0.005  foam
  *   0.003  rubber         (insulator)
  *   0.002  wall           (insulator)
@@ -86,7 +85,10 @@ const defs: ElementDefinition[] = [
     density: 0,
     hotkey: 'E',
     description: 'Erase / clear cells.',
-    thermal: { conductivity: 0.008, emitTemp: 0, emitStrength: 0.015 },
+    // Air conducts heat visibly (~wood range) but loses it slowly to an
+    // infinite ambient sink so a room can actually "warm up" instead of
+    // having every degree instantly absorbed.
+    thermal: { conductivity: 0.020, emitTemp: 0, emitStrength: 0.004 },
   },
   {
     id: 1,

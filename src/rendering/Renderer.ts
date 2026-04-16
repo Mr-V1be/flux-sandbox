@@ -203,14 +203,17 @@ export class Renderer {
         let r = 10;
         let g = 10;
         let b = 11;
-        if (tintMode) {
-          const t = temps[i];
-          if (t > 3 || t < -3) {
-            const tint = tempTint(t);
-            r = clamp255(r * (1 - tint.a) + tint.r * tint.a);
-            g = clamp255(g * (1 - tint.a) + tint.g * tint.a);
-            b = clamp255(b * (1 - tint.a) + tint.b * tint.a);
-          }
+        const t = temps[i];
+        // Tint mode shows air temperature at full strength; the default
+        // (off) mode still hints at thermal gradients with a faint haze
+        // so a heated / cooled room is visibly different from empty space.
+        const threshold = tintMode ? 3 : 10;
+        if (t > threshold || t < -threshold) {
+          const tint = tempTint(t);
+          const a = tint.a * (tintMode ? 1 : 0.3);
+          r = clamp255(r * (1 - a) + tint.r * a);
+          g = clamp255(g * (1 - a) + tint.g * a);
+          b = clamp255(b * (1 - a) + tint.b * a);
         }
         data[p] = r;
         data[p + 1] = g;
