@@ -32,6 +32,8 @@ const BLOOM_BY_KEY: Record<string, number> = {
   portal_b: 0.4,
   lightning_rod: 0.15,
   thermite: 0.3,
+  antimatter: 0.6,
+  ice9: 0.2,
 };
 
 export function buildVisualLookups(

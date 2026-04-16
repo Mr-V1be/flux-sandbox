@@ -234,3 +234,222 @@ export const pulseRenderColor = (cold: number, hot: number, speed = 0.004) => {
     return lerpColor(cold, hot, t);
   };
 };
+
+// ═══════════════════════════════════════════════════════════════════════
+// Antimatter — annihilates on contact with anything non-wall.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const antimatterBehavior: ElementBehavior = (ctx) => {
+  let triggered = false;
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (triggered) return;
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const cell = ctx.grid.get(nx, ny);
+    const id = getElement(cell);
+    if (id === EMPTY_ID) return;
+    const nd = getDefinition(id);
+    if (!nd || nd.key === 'wall' || nd.key === 'antimatter') return;
+    // Annihilate neighbour and self, leave fire + heat.
+    const fireId = getIdByKey('fire');
+    ctx.grid.set(nx, ny, encode(fireId, 60));
+    ctx.grid.set(ctx.x, ctx.y, encode(fireId, 60));
+    ctx.field.set(nx, ny, 110);
+    ctx.field.set(ctx.x, ctx.y, 110);
+    triggered = true;
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Ice-9 — crystallises any adjacent water into more ice-9 (chain reaction).
+// ═══════════════════════════════════════════════════════════════════════
+
+export const ice9Behavior: ElementBehavior = (ctx) => {
+  const selfId = getIdByKey('ice9');
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const nd = getDefinition(getElement(ctx.grid.get(nx, ny)));
+    if (nd?.key === 'water' && ctx.rand() < 0.5) {
+      ctx.grid.set(nx, ny, encode(selfId));
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Lightning cloud — occasionally discharges a downward spark.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const lightningCloudBehavior: ElementBehavior = (ctx) => {
+  if (ctx.tick % 120 !== 0) return;
+  if (ctx.rand() > 0.35) return;
+  const sparkId = getIdByKey('spark');
+  // Travel a few cells downward, then drop a spark where it first hits matter.
+  for (let dy = 1; dy <= 18; dy++) {
+    const y = ctx.y + dy;
+    if (!ctx.grid.inBounds(ctx.x, y)) return;
+    const id = getElement(ctx.grid.get(ctx.x, y));
+    if (id !== EMPTY_ID) {
+      // One cell above impact, so the spark can ignite / arc.
+      const above = y - 1;
+      if (ctx.grid.inBounds(ctx.x, above)) {
+        const existing = getElement(ctx.grid.get(ctx.x, above));
+        if (existing === EMPTY_ID) ctx.grid.set(ctx.x, above, encode(sparkId));
+      }
+      return;
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Geyser — pumps steam upward every few seconds.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const geyserBehavior: ElementBehavior = (ctx) => {
+  if (ctx.tick % 80 !== 0) return;
+  const steamId = getIdByKey('steam');
+  const waterId = getIdByKey('water');
+  const above = ctx.y - 1;
+  if (!ctx.grid.inBounds(ctx.x, above)) return;
+  // Fire a small column of steam topped with water droplets.
+  for (let dy = 1; dy <= 6; dy++) {
+    const y = ctx.y - dy;
+    if (!ctx.grid.inBounds(ctx.x, y)) break;
+    if (getElement(ctx.grid.get(ctx.x, y)) !== EMPTY_ID) break;
+    if (dy <= 4) {
+      ctx.grid.set(ctx.x, y, encode(steamId, 200));
+      ctx.field.set(ctx.x, y, 70);
+    } else if (ctx.rand() < 0.4) {
+      ctx.grid.set(ctx.x, y, encode(waterId));
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Oxygen — fuels fire: extends adjacent fire lifespan.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const oxygenBehavior: ElementBehavior = (ctx) => {
+  if (ctx.rand() > 0.15) return;
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const cell = ctx.grid.get(nx, ny);
+    const nd = getDefinition(getElement(cell));
+    if (nd?.key !== 'fire') return;
+    // Refresh fire's life byte up to 80 so it burns longer in oxygen-rich air.
+    const life = (cell >> 12) & 0xff;
+    if (life < 80) {
+      const boosted = (cell & ~0x000ff000) | (80 << 12);
+      ctx.grid.set(nx, ny, boosted);
+    }
+    // Oxygen is consumed when feeding fire.
+    if (ctx.rand() < 0.3) ctx.grid.set(ctx.x, ctx.y, encode(EMPTY_ID));
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// CO2 — smothers adjacent fire, turning it into smoke.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const co2Behavior: ElementBehavior = (ctx) => {
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const nd = getDefinition(getElement(ctx.grid.get(nx, ny)));
+    if (nd?.key === 'fire' && ctx.rand() < 0.4) {
+      ctx.grid.set(nx, ny, encode(getIdByKey('smoke'), 220));
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Chlorine — lethal to organic (plant / seed / mushroom).
+// ═══════════════════════════════════════════════════════════════════════
+
+export const chlorineBehavior: ElementBehavior = (ctx) => {
+  if (ctx.rand() > 0.12) return;
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const cell = ctx.grid.get(nx, ny);
+    const nd = getDefinition(getElement(cell));
+    if (!nd) return;
+    if (nd.key === 'plant' || nd.key === 'seed' || nd.key === 'mushroom') {
+      ctx.grid.set(nx, ny, encode(getIdByKey('ash')));
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Poison — kills organic on contact, spreads slowly through water.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const poisonReaction: ElementBehavior = (ctx) => {
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const cell = ctx.grid.get(nx, ny);
+    const nd = getDefinition(getElement(cell));
+    if (!nd) return;
+    if (nd.key === 'plant' || nd.key === 'mushroom' || nd.key === 'seed') {
+      if (ctx.rand() < 0.2) ctx.grid.set(nx, ny, encode(getIdByKey('ash')));
+    } else if (nd.key === 'water' && ctx.rand() < 0.008) {
+      ctx.grid.set(nx, ny, encode(getIdByKey('poison')));
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Mushroom — spreads onto ash / mud / dirt near moisture.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const mushroomBehavior: ElementBehavior = (ctx) => {
+  if (ctx.rand() > 0.04) return;
+  let hasWater = false;
+  const targets: Array<[number, number]> = [];
+  forEachNeighbor8(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const nd = getDefinition(getElement(ctx.grid.get(nx, ny)));
+    if (!nd) return;
+    if (nd.key === 'water') hasWater = true;
+    if (nd.key === 'ash' || nd.key === 'mud') targets.push([nx, ny]);
+  });
+  if (!hasWater || targets.length === 0) return;
+  const pick = targets[(ctx.rand() * targets.length) | 0];
+  if (pick) ctx.grid.set(pick[0], pick[1], encode(getIdByKey('mushroom')));
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Nanobots — consume a random non-wall neighbour and duplicate into empty.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const nanobotBehavior: ElementBehavior = (ctx) => {
+  if (ctx.rand() > 0.12) return;
+  const selfId = getIdByKey('nanobots');
+  const targets: Array<[number, number]> = [];
+  const empties: Array<[number, number]> = [];
+  forEachNeighbor4(ctx, (nx, ny) => {
+    if (!ctx.grid.inBounds(nx, ny)) return;
+    const id = getElement(ctx.grid.get(nx, ny));
+    if (id === EMPTY_ID) {
+      empties.push([nx, ny]);
+      return;
+    }
+    const nd = getDefinition(id);
+    if (!nd) return;
+    if (
+      nd.key === 'wall' ||
+      nd.key === 'nanobots' ||
+      nd.key === 'antimatter' ||
+      nd.key === 'void' ||
+      nd.key === 'blackhole'
+    )
+      return;
+    targets.push([nx, ny]);
+  });
+  if (targets.length > 0) {
+    // Consume the neighbour.
+    const eat = targets[(ctx.rand() * targets.length) | 0];
+    if (eat) ctx.grid.set(eat[0], eat[1], encode(EMPTY_ID));
+  }
+  if (empties.length > 0 && ctx.rand() < 0.5) {
+    // Replicate outward.
+    const spawn = empties[(ctx.rand() * empties.length) | 0];
+    if (spawn) ctx.grid.set(spawn[0], spawn[1], encode(selfId));
+  }
+};
