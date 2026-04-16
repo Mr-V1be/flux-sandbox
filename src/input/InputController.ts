@@ -256,7 +256,7 @@ export class InputController {
       return;
     }
     if (key === 't') {
-      store.getState().toggleTemperature();
+      store.getState().cycleHeatMode();
       return;
     }
     const match = listElements().find((d) => d.hotkey && d.hotkey.toLowerCase() === key);

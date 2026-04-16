@@ -1,18 +1,25 @@
 import { Grid } from './Grid';
-import { ThermalLookups } from './Lookups';
+import { MAX_DELTA_PER_TICK, ThermalLookups } from './Lookups';
 import { getElement } from './types';
 
 /**
- * Temperature field: one Int8 per cell.
+ * Temperature field — one signed byte of temperature per cell.
  *
- * Hot loop performance matters — the grid can be 500×320 and diffusion
- * runs every tick. Implementation rules:
- *   - Flat typed-array lookups (ThermalLookups) only. No Map.get, no
- *     object property access inside the loops.
- *   - Single combined pass: read this.temps, write buffer.
- *   - TypedArray.set used for full-array copies (hits memcpy).
- *   - Diffusion does NOT wake chunks. Chunks wake from element behavior
- *     or thermal state transitions, so inactive regions stay inactive.
+ * Heat equation (forward-Euler, 4-neighbour 2D Laplacian):
+ *
+ *     T'(x,y) = T(x,y) + Σ_n  k_pair(T, n) · (T_n − T)
+ *
+ * where `k_pair(a, b)` is a precomputed harmonic mean of each pair's
+ * conductivity (series heat transfer), clamped at `MAX_EDGE_K` so the
+ * scheme is stable for all 4-neighbour sums. The per-tick delta is
+ * additionally clipped at `MAX_DELTA_PER_TICK` to suppress worst-case
+ * spikes when a cell is surrounded by very hot neighbours.
+ *
+ * Heat emitters (lava, torch, ice, cryo, empty=ambient) then pull each
+ * emitter cell a fraction `emitStrength` toward its `emitTemp`.
+ *
+ * Cells flagged as "noticeable" (|T| > 3°) wake their chunk next tick
+ * so a heat front can cross chunk boundaries it wasn't active in yet.
  */
 export class TemperatureField {
   public readonly temps: Int8Array;
@@ -47,7 +54,7 @@ export class TemperatureField {
     this.buffer.fill(0);
   }
 
-  /** Single-pass diffusion + emitter application over active chunks only. */
+  /** Single-pass physical diffusion + emitter reset, active chunks only. */
   diffuse(grid: Grid, lu: ThermalLookups): void {
     const { width, temps, buffer } = this;
     const { chunkSize, chunksX, chunksY } = grid;
@@ -56,7 +63,8 @@ export class TemperatureField {
     // Start each tick with buffer mirroring temps so inactive chunks are preserved.
     buffer.set(temps);
 
-    const conductivity = lu.conductivity;
+    const edgeK = lu.edgeK;
+    const size = lu.edgeKSize;
     const emitTemp = lu.emitTemp;
     const emitStrength = lu.emitStrength;
     const hasEmit = lu.hasEmit;
@@ -74,61 +82,53 @@ export class TemperatureField {
           for (let x = x0; x < x1; x++) {
             const idx = row + x;
             const t = temps[idx];
-            const id = cells[idx] & 0xfff; // inline getElement for speed
-            const ownK = conductivity[id];
+            const id = cells[idx] & 0xfff;
+            const rowInEdge = id * size;
 
             let sum = 0;
-            let count = 0;
-
             if (x > 0) {
               const n = idx - 1;
-              const nK = conductivity[cells[n] & 0xfff];
-              const k = ownK < nK ? ownK : nK;
-              sum += k * (temps[n] - t);
-              count++;
+              const nid = cells[n] & 0xfff;
+              sum += edgeK[rowInEdge + nid] * (temps[n] - t);
             }
             if (x < width - 1) {
               const n = idx + 1;
-              const nK = conductivity[cells[n] & 0xfff];
-              const k = ownK < nK ? ownK : nK;
-              sum += k * (temps[n] - t);
-              count++;
+              const nid = cells[n] & 0xfff;
+              sum += edgeK[rowInEdge + nid] * (temps[n] - t);
             }
             if (y > 0) {
               const n = idx - width;
-              const nK = conductivity[cells[n] & 0xfff];
-              const k = ownK < nK ? ownK : nK;
-              sum += k * (temps[n] - t);
-              count++;
+              const nid = cells[n] & 0xfff;
+              sum += edgeK[rowInEdge + nid] * (temps[n] - t);
             }
             if (y < this.height - 1) {
               const n = idx + width;
-              const nK = conductivity[cells[n] & 0xfff];
-              const k = ownK < nK ? ownK : nK;
-              sum += k * (temps[n] - t);
-              count++;
+              const nid = cells[n] & 0xfff;
+              sum += edgeK[rowInEdge + nid] * (temps[n] - t);
             }
 
-            let newT = count > 0 ? t + sum : t;
+            // Clamp per-tick delta for a second layer of stability and
+            // "feel" — a single neighbour can't instantly reshape a cell.
+            if (sum > MAX_DELTA_PER_TICK) sum = MAX_DELTA_PER_TICK;
+            else if (sum < -MAX_DELTA_PER_TICK) sum = -MAX_DELTA_PER_TICK;
+
+            let newT = t + sum;
             if (hasEmit[id]) {
               newT += (emitTemp[id] - newT) * emitStrength[id];
             }
 
-            // Clamp-and-round into Int16 buffer (Int8 range).
             const clamped = newT < -128 ? -128 : newT > 127 ? 127 : newT | 0;
             buffer[idx] = clamped;
 
-            // Hot cells keep their chunk warm next tick so heat can flow
-            // past chunk boundaries and not freeze at the edge.
+            // Noticeable thermal mass → keep the chunk alive next tick so
+            // the front can cross chunk borders without decaying to ambient.
             if (clamped > 3 || clamped < -3) grid.wake(x, y);
           }
         }
       }
     }
 
-    // Copy back (TypedArray.set is memcpy-fast).
     temps.set(buffer);
-
-    void getElement; // silence unused
+    void getElement;
   }
 }

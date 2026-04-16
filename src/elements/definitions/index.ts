@@ -56,6 +56,24 @@ import {
  * IDs are stable integers (never reuse), keys are stable strings.
  * Thermal profiles are declarative — the ThermalEngine reads them and
  * performs state transitions so individual elements stay tiny.
+ *
+ * Thermal calibration (conductivity values, unitless):
+ *
+ *   0.220  copper           (best conductor)
+ *   0.180  iron, torch, cryo, spark, mercury, lightning rod
+ *   0.150  fire, lava, diamond
+ *   0.100  uranium, ice-9
+ *   0.080  ice, snow, nanobots, antimatter, geyser, crystal
+ *   0.045  stone, coal
+ *   0.040  water, acid, glass, obsidian, radiation, portals, poison, nitro, napalm
+ *   0.030  sand, mud, salt, gunpowder, wick, waxliq, steam, tar
+ *   0.020  wood, ash, dust, plant, honey, wax, helium, antigravity, blackhole
+ *   0.015  smoke, gas, chlorine, co2, methane, foam, glue, fan, void, storm cloud
+ *   0.010  cloner, oxygen
+ *   0.008  empty (air)
+ *   0.005  foam
+ *   0.003  rubber         (insulator)
+ *   0.002  wall           (insulator)
  */
 
 const defs: ElementDefinition[] = [
@@ -68,7 +86,7 @@ const defs: ElementDefinition[] = [
     density: 0,
     hotkey: 'E',
     description: 'Erase / clear cells.',
-    thermal: { conductivity: 0.04, emitTemp: 0, emitStrength: 0.03 },
+    thermal: { conductivity: 0.008, emitTemp: 0, emitStrength: 0.015 },
   },
   {
     id: 1,
@@ -80,7 +98,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     hotkey: 'W',
     description: 'Indestructible barrier. Thermally inert.',
-    thermal: { conductivity: 0.01 },
+    thermal: { conductivity: 0.002 },
   },
   {
     id: 2,
@@ -91,7 +109,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 14,
     density: 900,
     description: 'Hardened rock. Formed when lava meets water.',
-    thermal: { conductivity: 0.1 },
+    thermal: { conductivity: 0.045 },
   },
   {
     id: 3,
@@ -104,7 +122,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'S',
     description: 'Classic powder. Melts into glass near lava; mixes with water into mud.',
     update: compose(createPowderBehavior(60), sandWetReaction),
-    thermal: { conductivity: 0.08 },
+    thermal: { conductivity: 0.030 },
   },
   {
     id: 4,
@@ -118,7 +136,7 @@ const defs: ElementDefinition[] = [
     description: 'Freezes into ice below -5°, boils into steam above 90°.',
     update: createLiquidBehavior(30, 6),
     thermal: {
-      conductivity: 0.1,
+      conductivity: 0.060,
       freezeAt: -5,
       freezesInto: 'ice',
       boilAt: 90,
@@ -138,7 +156,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'O',
     description: 'Auto-ignites above 55°. Floats on water.',
     update: createLiquidBehavior(20, 4),
-    thermal: { conductivity: 0.08, ignitesAt: 55 },
+    thermal: { conductivity: 0.040, ignitesAt: 55 },
   },
   {
     id: 6,
@@ -151,7 +169,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'A',
     description: 'Dissolves most materials on contact.',
     update: compose(createLiquidBehavior(35, 5), acidReaction),
-    thermal: { conductivity: 0.09 },
+    thermal: { conductivity: 0.050 },
   },
   {
     id: 7,
@@ -165,9 +183,9 @@ const defs: ElementDefinition[] = [
     description: 'Molten rock at 110°. Ignites, melts, petrifies.',
     update: compose(createLiquidBehavior(80, 2), lavaReaction),
     thermal: {
-      conductivity: 0.2,
+      conductivity: 0.130,
       emitTemp: 110,
-      emitStrength: 0.4,
+      emitStrength: 0.20,
       freezeAt: 40,
       freezesInto: 'stone',
     },
@@ -183,7 +201,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'F',
     description: 'Self-extinguishing heat at 90°. Spreads through flammables.',
     update: fireReaction,
-    thermal: { conductivity: 0.2, emitTemp: 90, emitStrength: 0.6 },
+    thermal: { conductivity: 0.150, emitTemp: 90, emitStrength: 0.25 },
   },
   {
     id: 9,
@@ -195,7 +213,7 @@ const defs: ElementDefinition[] = [
     density: 2,
     description: 'Rises and fades.',
     update: createGasBehavior({ density: 2, decayChance: 0.006 }),
-    thermal: { conductivity: 0.04 },
+    thermal: { conductivity: 0.015 },
   },
   {
     id: 10,
@@ -207,7 +225,7 @@ const defs: ElementDefinition[] = [
     density: 3,
     description: 'Condenses back into water below 50°.',
     update: createGasBehavior({ density: 3, decayChance: 0.0015 }),
-    thermal: { conductivity: 0.05, condenseAt: 50, condensesInto: 'water' },
+    thermal: { conductivity: 0.030, condenseAt: 50, condensesInto: 'water' },
   },
   {
     id: 11,
@@ -225,7 +243,7 @@ const defs: ElementDefinition[] = [
       createGasBehavior({ density: 4, decayChance: 0.002 }),
       explosiveReaction(6, 1),
     ),
-    thermal: { conductivity: 0.05, ignitesAt: 30, explodeRadius: 6 },
+    thermal: { conductivity: 0.015, ignitesAt: 30, explodeRadius: 6 },
   },
   {
     id: 12,
@@ -238,7 +256,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.15,
     description: 'Ignites above 75°.',
-    thermal: { conductivity: 0.05, ignitesAt: 75 },
+    thermal: { conductivity: 0.020, ignitesAt: 75 },
   },
   {
     id: 13,
@@ -253,7 +271,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'P',
     description: 'Grows along water. Ignites above 45°.',
     update: plantReaction,
-    thermal: { conductivity: 0.06, ignitesAt: 45 },
+    thermal: { conductivity: 0.025, ignitesAt: 45 },
   },
   {
     id: 14,
@@ -266,9 +284,9 @@ const defs: ElementDefinition[] = [
     hotkey: 'I',
     description: 'Melts above 3°.',
     thermal: {
-      conductivity: 0.15,
+      conductivity: 0.080,
       emitTemp: -15,
-      emitStrength: 0.1,
+      emitStrength: 0.10,
       meltAt: 3,
       meltsInto: 'water',
     },
@@ -282,7 +300,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 6,
     density: 850,
     description: 'Sand + lava.',
-    thermal: { conductivity: 0.08 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 16,
@@ -294,7 +312,7 @@ const defs: ElementDefinition[] = [
     density: 40,
     description: 'Burnt remains.',
     update: createPowderBehavior(40),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.020 },
   },
   {
     id: 17,
@@ -306,7 +324,7 @@ const defs: ElementDefinition[] = [
     density: 55,
     description: 'Dissolves in water, melts ice.',
     update: compose(createPowderBehavior(55), saltReaction),
-    thermal: { conductivity: 0.06 },
+    thermal: { conductivity: 0.030 },
   },
   {
     id: 18,
@@ -320,7 +338,7 @@ const defs: ElementDefinition[] = [
     burnChance: 1,
     description: 'Explodes above 50°.',
     update: compose(createPowderBehavior(55), explosiveReaction(5, 1)),
-    thermal: { conductivity: 0.08, ignitesAt: 50, explodeRadius: 5 },
+    thermal: { conductivity: 0.030, ignitesAt: 50, explodeRadius: 5 },
   },
   {
     id: 19,
@@ -332,7 +350,7 @@ const defs: ElementDefinition[] = [
     density: 45,
     description: 'Sprouts into plant on water.',
     update: compose(createPowderBehavior(45), seedReaction),
-    thermal: { conductivity: 0.06 },
+    thermal: { conductivity: 0.025 },
   },
   {
     id: 20,
@@ -344,7 +362,7 @@ const defs: ElementDefinition[] = [
     density: 1,
     description: 'Single-tick igniter. Also energises conductors.',
     update: sparkReaction,
-    thermal: { conductivity: 0.3, emitTemp: 60, emitStrength: 0.4 },
+    thermal: { conductivity: 0.200, emitTemp: 60, emitStrength: 0.25 },
   },
   {
     id: 21,
@@ -358,7 +376,7 @@ const defs: ElementDefinition[] = [
     burnChance: 1,
     description: 'Huge explosion above 40°.',
     update: explosiveReaction(10, 1),
-    thermal: { conductivity: 0.08, ignitesAt: 40, explodeRadius: 10 },
+    thermal: { conductivity: 0.035, ignitesAt: 40, explodeRadius: 10 },
   },
   {
     id: 22,
@@ -372,7 +390,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.6,
     description: 'Fine flammable particulate.',
     update: createPowderBehavior(25),
-    thermal: { conductivity: 0.05, ignitesAt: 65 },
+    thermal: { conductivity: 0.020, ignitesAt: 65 },
   },
   // ─── liquids ──────────────────────────────────────────────────────────
   {
@@ -387,7 +405,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.9,
     description: 'Sticky liquid fire. Auto-ignites above 45°.',
     update: createLiquidBehavior(25, 2),
-    thermal: { conductivity: 0.09, ignitesAt: 45 },
+    thermal: { conductivity: 0.040, ignitesAt: 45 },
   },
   {
     id: 24,
@@ -399,7 +417,7 @@ const defs: ElementDefinition[] = [
     density: 500,
     description: 'Heavy silver liquid. Sinks through anything.',
     update: createLiquidBehavior(500, 3),
-    thermal: { conductivity: 0.2 },
+    thermal: { conductivity: 0.180 },
   },
   {
     id: 25,
@@ -413,7 +431,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.1,
     description: 'Viscous sweet liquid. Barely flows.',
     update: createLiquidBehavior(55, 1),
-    thermal: { conductivity: 0.05, ignitesAt: 85 },
+    thermal: { conductivity: 0.020, ignitesAt: 85 },
   },
   {
     id: 26,
@@ -425,7 +443,7 @@ const defs: ElementDefinition[] = [
     density: 40,
     description: 'Squishy and slow.',
     update: createLiquidBehavior(40, 1),
-    thermal: { conductivity: 0.07 },
+    thermal: { conductivity: 0.030 },
   },
   // ─── gases ────────────────────────────────────────────────────────────
   {
@@ -443,7 +461,7 @@ const defs: ElementDefinition[] = [
       createGasBehavior({ density: 2, decayChance: 0.0015, spread: 3 }),
       explosiveReaction(5, 1),
     ),
-    thermal: { conductivity: 0.05, ignitesAt: 25, explodeRadius: 5 },
+    thermal: { conductivity: 0.015, ignitesAt: 25, explodeRadius: 5 },
   },
   // ─── powders ──────────────────────────────────────────────────────────
   {
@@ -457,9 +475,9 @@ const defs: ElementDefinition[] = [
     description: 'Melts to water above 1°.',
     update: createPowderBehavior(35),
     thermal: {
-      conductivity: 0.1,
+      conductivity: 0.060,
       emitTemp: -10,
-      emitStrength: 0.1,
+      emitStrength: 0.10,
       meltAt: 1,
       meltsInto: 'water',
     },
@@ -474,7 +492,7 @@ const defs: ElementDefinition[] = [
     density: 70,
     description: 'Wet sand. Dries above 45°.',
     update: createPowderBehavior(70),
-    thermal: { conductivity: 0.06, meltAt: 45, meltsInto: 'sand' },
+    thermal: { conductivity: 0.035, meltAt: 45, meltsInto: 'sand' },
   },
   {
     id: 30,
@@ -486,7 +504,7 @@ const defs: ElementDefinition[] = [
     density: 45,
     description: 'Infects plants and wood. Killed by fire / acid.',
     update: compose(createPowderBehavior(45), virusReaction),
-    thermal: { conductivity: 0.05, ignitesAt: 55 },
+    thermal: { conductivity: 0.025, ignitesAt: 55 },
   },
   {
     id: 31,
@@ -500,7 +518,7 @@ const defs: ElementDefinition[] = [
     burnChance: 1,
     description: 'Unstable. Massive explosion above 25°.',
     update: compose(createPowderBehavior(50), explosiveReaction(14, 1)),
-    thermal: { conductivity: 0.1, ignitesAt: 25, explodeRadius: 14 },
+    thermal: { conductivity: 0.040, ignitesAt: 25, explodeRadius: 14 },
   },
   // ─── solids ───────────────────────────────────────────────────────────
   {
@@ -514,7 +532,7 @@ const defs: ElementDefinition[] = [
     description: 'Conducts electricity. Glows when charged. High heat conductivity.',
     update: conductorBehavior,
     renderColor: conductorRenderColor(0xb2632a, 0xfff1a8),
-    thermal: { conductivity: 0.3 },
+    thermal: { conductivity: 0.220 },
   },
   {
     id: 33,
@@ -527,7 +545,7 @@ const defs: ElementDefinition[] = [
     description: 'Conductive, magnetic metal. Attracted by magnets.',
     update: conductorBehavior,
     renderColor: conductorRenderColor(0x7d7d86, 0xe8edff),
-    thermal: { conductivity: 0.28 },
+    thermal: { conductivity: 0.180 },
   },
   {
     id: 34,
@@ -539,7 +557,7 @@ const defs: ElementDefinition[] = [
     density: 900,
     description: 'Pulses electricity into adjacent copper / iron.',
     update: batteryBehavior,
-    thermal: { conductivity: 0.1 },
+    thermal: { conductivity: 0.050 },
   },
   {
     id: 35,
@@ -551,7 +569,7 @@ const defs: ElementDefinition[] = [
     density: 950,
     description: 'Pulls iron toward itself within a radius.',
     update: magnetBehavior,
-    thermal: { conductivity: 0.15 },
+    thermal: { conductivity: 0.070 },
   },
   {
     id: 36,
@@ -563,7 +581,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Duplicates the material next to it.',
     update: clonerBehavior,
-    thermal: { conductivity: 0.02 },
+    thermal: { conductivity: 0.010 },
   },
   {
     id: 37,
@@ -575,7 +593,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Annihilates anything touching it.',
     update: voidBehavior,
-    thermal: { conductivity: 0.05, emitTemp: 0, emitStrength: 1 },
+    thermal: { conductivity: 0.015, emitTemp: 0, emitStrength: 0.5 },
   },
   {
     id: 38,
@@ -587,7 +605,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Persistent 120° heat source.',
     update: torchBehavior,
-    thermal: { conductivity: 0.25, emitTemp: 120, emitStrength: 0.7 },
+    thermal: { conductivity: 0.180, emitTemp: 120, emitStrength: 0.25 },
   },
   {
     id: 39,
@@ -599,7 +617,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Blows particles above it upward.',
     update: fanBehavior,
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.015 },
   },
   {
     id: 40,
@@ -611,7 +629,7 @@ const defs: ElementDefinition[] = [
     density: 800,
     description: 'Grows where salt meets water.',
     update: crystalReaction,
-    thermal: { conductivity: 0.12 },
+    thermal: { conductivity: 0.060 },
   },
   {
     id: 41,
@@ -626,9 +644,9 @@ const defs: ElementDefinition[] = [
     update: uraniumReaction,
     renderColor: pulseRenderColor(0x44a556, 0x9cff7a, 0.005),
     thermal: {
-      conductivity: 0.18,
+      conductivity: 0.100,
       emitTemp: 30,
-      emitStrength: 0.2,
+      emitStrength: 0.15,
       ignitesAt: 100,
       explodeRadius: 20,
     },
@@ -644,7 +662,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 1,
     description: 'Light it and watch the chain reaction travel.',
-    thermal: { conductivity: 0.07, ignitesAt: 60 },
+    thermal: { conductivity: 0.030, ignitesAt: 60 },
   },
   {
     id: 43,
@@ -657,7 +675,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.08,
     description: 'Slow, long-lasting burn.',
-    thermal: { conductivity: 0.08, ignitesAt: 70 },
+    thermal: { conductivity: 0.045, ignitesAt: 70 },
   },
   // ─── new additions for thermal play ──────────────────────────────────
   {
@@ -671,9 +689,9 @@ const defs: ElementDefinition[] = [
     description: 'Liquid nitrogen. Freezes everything nearby.',
     update: createLiquidBehavior(32, 4),
     thermal: {
-      conductivity: 0.25,
+      conductivity: 0.180,
       emitTemp: -80,
-      emitStrength: 0.5,
+      emitStrength: 0.20,
       boilAt: -40,
       boilsInto: 'steam',
     },
@@ -690,7 +708,7 @@ const defs: ElementDefinition[] = [
     burnChance: 1,
     description: 'Ignites above 70° and burns at 120°.',
     update: createPowderBehavior(65),
-    thermal: { conductivity: 0.15, ignitesAt: 70 },
+    thermal: { conductivity: 0.070, ignitesAt: 70 },
   },
   // ─── exotic ──────────────────────────────────────────────────────────
   {
@@ -703,7 +721,7 @@ const defs: ElementDefinition[] = [
     density: 1,
     description: 'Directional projectile. Mutates what it touches.',
     update: radiationBehavior,
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 47,
@@ -716,7 +734,7 @@ const defs: ElementDefinition[] = [
     description: 'Pulls everything nearby into the event horizon.',
     update: blackHoleBehavior,
     renderColor: pulseRenderColor(0x050508, 0x1a0a30, 0.002),
-    thermal: { conductivity: 0.02 },
+    thermal: { conductivity: 0.020 },
   },
   {
     id: 48,
@@ -729,7 +747,7 @@ const defs: ElementDefinition[] = [
     description: 'Teleports adjacent cells to a random Portal B.',
     update: portalABehavior,
     renderColor: pulseRenderColor(0x3a66ff, 0x8ab4ff, 0.008),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 49,
@@ -742,7 +760,7 @@ const defs: ElementDefinition[] = [
     description: 'Teleports adjacent cells to a random Portal A.',
     update: portalBBehavior,
     renderColor: pulseRenderColor(0xff3a88, 0xffa0c8, 0.008),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 50,
@@ -754,7 +772,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Column of cells above is pushed upward.',
     update: antigravityBehavior,
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.020 },
   },
   {
     id: 51,
@@ -766,7 +784,7 @@ const defs: ElementDefinition[] = [
     density: 900,
     description: 'Calls a lightning bolt from the sky every few seconds.',
     update: lightningRodBehavior,
-    thermal: { conductivity: 0.28 },
+    thermal: { conductivity: 0.180 },
   },
   {
     id: 52,
@@ -778,7 +796,7 @@ const defs: ElementDefinition[] = [
     density: 10,
     description: 'Floaty soap foam. Pops in fire.',
     update: createLiquidBehavior(10, 3),
-    thermal: { conductivity: 0.04, ignitesAt: 60 },
+    thermal: { conductivity: 0.005, ignitesAt: 60 },
   },
   {
     id: 53,
@@ -790,7 +808,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Pins adjacent powder/liquid cells in place.',
     update: glueBehavior,
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.015 },
   },
   // ─── atmospheric gases ────────────────────────────────────────────────
   {
@@ -808,7 +826,7 @@ const defs: ElementDefinition[] = [
       createGasBehavior({ density: 1, decayChance: 0.0005, spread: 3 }),
       oxygenBehavior,
     ),
-    thermal: { conductivity: 0.04, ignitesAt: 150 },
+    thermal: { conductivity: 0.010, ignitesAt: 150 },
   },
   {
     id: 55,
@@ -820,7 +838,7 @@ const defs: ElementDefinition[] = [
     density: 7,
     description: 'Smothers fire on contact.',
     update: compose(createGasBehavior({ density: 7, decayChance: 0.002 }), co2Behavior),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.015 },
   },
   {
     id: 56,
@@ -832,7 +850,7 @@ const defs: ElementDefinition[] = [
     density: 9,
     description: 'Toxic. Destroys plants, seeds, mushrooms.',
     update: compose(createGasBehavior({ density: 9, decayChance: 0.0015 }), chlorineBehavior),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.015 },
   },
   {
     id: 57,
@@ -844,7 +862,7 @@ const defs: ElementDefinition[] = [
     density: 0,
     description: 'Lighter than everything. Rises very fast.',
     update: createGasBehavior({ density: 0, decayChance: 0.0005, spread: 4 }),
-    thermal: { conductivity: 0.03 },
+    thermal: { conductivity: 0.020 },
   },
   // ─── exotic matter ────────────────────────────────────────────────────
   {
@@ -858,7 +876,7 @@ const defs: ElementDefinition[] = [
     description: 'Annihilates on contact. Do not breathe near it.',
     update: antimatterBehavior,
     renderColor: pulseRenderColor(0xff1a88, 0xffc8e8, 0.006),
-    thermal: { conductivity: 0.1, emitTemp: 40, emitStrength: 0.2 },
+    thermal: { conductivity: 0.080, emitTemp: 40, emitStrength: 0.15 },
   },
   {
     id: 59,
@@ -871,9 +889,9 @@ const defs: ElementDefinition[] = [
     description: 'Crystallises every drop of water it touches.',
     update: ice9Behavior,
     thermal: {
-      conductivity: 0.2,
+      conductivity: 0.100,
       emitTemp: -20,
-      emitStrength: 0.15,
+      emitStrength: 0.10,
       meltAt: 20,
       meltsInto: 'water',
     },
@@ -891,7 +909,7 @@ const defs: ElementDefinition[] = [
       createGasBehavior({ density: 4, decayChance: 0 }),
       lightningCloudBehavior,
     ),
-    thermal: { conductivity: 0.05 },
+    thermal: { conductivity: 0.015 },
   },
   {
     id: 61,
@@ -905,7 +923,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.3,
     description: 'Spreads across ash / mud where moisture is near.',
     update: mushroomBehavior,
-    thermal: { conductivity: 0.06, ignitesAt: 50 },
+    thermal: { conductivity: 0.030, ignitesAt: 50 },
   },
   {
     id: 62,
@@ -917,7 +935,7 @@ const defs: ElementDefinition[] = [
     density: 55,
     description: 'Consume neighbours and replicate. Contain carefully.',
     update: compose(createPowderBehavior(55), nanobotBehavior),
-    thermal: { conductivity: 0.12, ignitesAt: 120 },
+    thermal: { conductivity: 0.070, ignitesAt: 120 },
   },
   {
     id: 63,
@@ -931,7 +949,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.4,
     description: 'Heavy, slow, burns long.',
     update: createLiquidBehavior(45, 1),
-    thermal: { conductivity: 0.05, ignitesAt: 70 },
+    thermal: { conductivity: 0.020, ignitesAt: 70 },
   },
   {
     id: 64,
@@ -943,7 +961,7 @@ const defs: ElementDefinition[] = [
     density: 28,
     description: 'Kills plants and mushrooms; slowly contaminates water.',
     update: compose(createLiquidBehavior(28, 4), poisonReaction),
-    thermal: { conductivity: 0.08 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 65,
@@ -956,7 +974,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.1,
     description: 'Electrical insulator. Burns slowly.',
-    thermal: { conductivity: 0.02, ignitesAt: 95 },
+    thermal: { conductivity: 0.003, ignitesAt: 95 },
   },
   {
     id: 66,
@@ -968,7 +986,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     description: 'Erupts a column of steam and water every few seconds.',
     update: geyserBehavior,
-    thermal: { conductivity: 0.15, emitTemp: 50, emitStrength: 0.15 },
+    thermal: { conductivity: 0.080, emitTemp: 50, emitStrength: 0.10 },
   },
   {
     id: 67,
@@ -979,7 +997,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 14,
     density: 930,
     description: 'Volcanic glass. Nearly indestructible.',
-    thermal: { conductivity: 0.08 },
+    thermal: { conductivity: 0.040 },
   },
   {
     id: 68,
@@ -990,7 +1008,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 24,
     density: 1000,
     description: 'Hardest solid. Conducts heat, resists everything.',
-    thermal: { conductivity: 0.22 },
+    thermal: { conductivity: 0.150 },
   },
   {
     id: 69,
@@ -1003,7 +1021,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.2,
     description: 'Melts above 50° into wax liquid.',
-    thermal: { conductivity: 0.06, meltAt: 50, meltsInto: 'waxliq', ignitesAt: 90 },
+    thermal: { conductivity: 0.020, meltAt: 50, meltsInto: 'waxliq', ignitesAt: 90 },
   },
   {
     id: 70,
@@ -1017,7 +1035,7 @@ const defs: ElementDefinition[] = [
     burnChance: 0.15,
     description: 'Molten wax. Hardens below 30°.',
     update: createLiquidBehavior(35, 2),
-    thermal: { conductivity: 0.05, freezeAt: 30, freezesInto: 'wax', ignitesAt: 85 },
+    thermal: { conductivity: 0.025, freezeAt: 30, freezesInto: 'wax', ignitesAt: 85 },
   },
   {
     id: 71,
@@ -1030,7 +1048,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.5,
     description: 'Absorbs wax and burns steadily.',
-    thermal: { conductivity: 0.08, ignitesAt: 60 },
+    thermal: { conductivity: 0.030, ignitesAt: 60 },
   },
 ];
 

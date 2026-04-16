@@ -11,9 +11,33 @@ import { ElementDefinition } from './types';
 
 const NO_SENTINEL = 0;
 
+/**
+ * Stability cap on a single edge's diffusion coefficient.
+ * For 4 neighbours the explicit forward-Euler Laplacian scheme is
+ * stable when per-edge k ≤ 0.25. We pick 0.22 for a safe margin —
+ * so the strongest possible pair (copper ↔ copper) still converges
+ * without oscillation.
+ */
+export const MAX_EDGE_K = 0.22;
+
+/**
+ * Clamp on the absolute temperature delta applied to a cell in one
+ * tick. A cell surrounded by 4 very-hot neighbours would otherwise
+ * spike unrealistically.
+ */
+export const MAX_DELTA_PER_TICK = 48;
+
 export interface ThermalLookups {
-  /** Thermal conductivity 0..0.5. */
+  /** Thermal conductivity 0..0.25. */
   conductivity: Float32Array;
+  /**
+   * Precomputed per-pair edge coefficient, indexed by `a * size + b`.
+   * Uses harmonic mean (physically correct for series heat transfer)
+   * clamped to `MAX_EDGE_K`. Diffusion inner loop does one array read.
+   */
+  edgeK: Float32Array;
+  /** Precomputed side length of edgeK; edgeK[i] covers ids 0..(size-1). */
+  edgeKSize: number;
   /** Emit target temp (only valid if hasEmit=1). */
   emitTemp: Int8Array;
   /** How hard emitTemp is applied (0..1). */
@@ -102,6 +126,7 @@ export const buildThermalLookups = (
     }
     hasThermal[id] = 1;
     conductivity[id] = clamp(p.conductivity, 0, 0.5);
+    void MAX_DELTA_PER_TICK;
     if (p.emitTemp !== undefined) {
       emitTemp[id] = p.emitTemp;
       emitStrength[id] = p.emitStrength ?? 1;
@@ -149,8 +174,26 @@ export const buildThermalLookups = (
 
   void NO_SENTINEL;
 
+  // Precompute harmonic-mean edge coefficient for every element pair.
+  // Formula: k_pair = 2 * k_a * k_b / (k_a + k_b), clamped to MAX_EDGE_K.
+  // For two insulators (k≈0) the harmonic mean vanishes → heat cannot cross.
+  // For a mix (metal ↔ air), result is bounded by the weaker material.
+  const edgeK = new Float32Array(size * size);
+  for (let a = 0; a < size; a++) {
+    const ka = conductivity[a];
+    for (let b = 0; b < size; b++) {
+      const kb = conductivity[b];
+      const sum = ka + kb;
+      let k = sum > 1e-6 ? (2 * ka * kb) / sum : 0;
+      if (k > MAX_EDGE_K) k = MAX_EDGE_K;
+      edgeK[a * size + b] = k;
+    }
+  }
+
   return {
     conductivity,
+    edgeK,
+    edgeKSize: size,
     emitTemp,
     emitStrength,
     hasEmit,

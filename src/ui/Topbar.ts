@@ -166,7 +166,7 @@ export class Topbar {
         this.field.clear();
       },
     );
-    this.thermalBtn.addEventListener('click', () => store.getState().toggleTemperature());
+    this.thermalBtn.addEventListener('click', () => store.getState().cycleHeatMode());
     this.shapeBtn.addEventListener('click', () => store.getState().cycleBrushShape());
     (this.root.querySelector('[data-act="share"]') as HTMLElement).addEventListener(
       'click',
@@ -451,8 +451,15 @@ export class Topbar {
         ? '<i data-lucide="play"></i>'
         : '<i data-lucide="pause"></i>';
 
-      if (s.showTemperature) this.thermalBtn.classList.add('is-active');
-      else this.thermalBtn.classList.remove('is-active');
+      this.thermalBtn.classList.remove('is-active', 'is-heatmap');
+      if (s.heatMode === 'tint') this.thermalBtn.classList.add('is-active');
+      else if (s.heatMode === 'heatmap') this.thermalBtn.classList.add('is-heatmap');
+      this.thermalBtn.title =
+        s.heatMode === 'off'
+          ? 'Heat overlay off (T cycles)'
+          : s.heatMode === 'tint'
+            ? 'Tint overlay (T to switch to heat map)'
+            : 'Heat map (T to turn off)';
 
       // Update shape icon.
       this.shapeBtn.innerHTML = `<i data-lucide="${SHAPE_ICON[s.brushShape]}"></i>`;

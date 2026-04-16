@@ -4,6 +4,46 @@ import { getLife, getVariant } from '@/core/types';
 import { registryArray } from '@/elements/registry';
 import { Camera } from './Camera';
 import { VisualLookups } from './VisualLookups';
+import { HeatMode } from '@/state/Store';
+
+// ─── heat-map palette ──────────────────────────────────────────────────
+// Inferno-style ramp precomputed once at module load into a 256×3 byte
+// array. Key colour stops chosen to read like a thermal imaging camera:
+// near-black ambient → deep purple cold → magenta mid → amber / white hot.
+const HEATMAP_STOPS: Array<[number, number, number, number]> = [
+  [0.00, 4, 0, 12],
+  [0.12, 20, 4, 50],
+  [0.24, 60, 14, 100],
+  [0.36, 120, 28, 120],
+  [0.48, 190, 50, 110],
+  [0.58, 230, 80, 70],
+  [0.68, 250, 130, 40],
+  [0.78, 255, 180, 40],
+  [0.88, 255, 220, 120],
+  [1.00, 252, 252, 240],
+];
+
+const HEATMAP_LUT = (() => {
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let a = HEATMAP_STOPS[0]!;
+    let b = HEATMAP_STOPS[HEATMAP_STOPS.length - 1]!;
+    for (let s = 0; s < HEATMAP_STOPS.length - 1; s++) {
+      if (t >= HEATMAP_STOPS[s]![0] && t <= HEATMAP_STOPS[s + 1]![0]) {
+        a = HEATMAP_STOPS[s]!;
+        b = HEATMAP_STOPS[s + 1]!;
+        break;
+      }
+    }
+    const span = b[0] - a[0];
+    const k = span > 0 ? (t - a[0]) / span : 0;
+    lut[i * 3 + 0] = Math.round(a[1] + (b[1] - a[1]) * k);
+    lut[i * 3 + 1] = Math.round(a[2] + (b[2] - a[2]) * k);
+    lut[i * 3 + 2] = Math.round(a[3] + (b[3] - a[3]) * k);
+  }
+  return lut;
+})();
 
 /**
  * Screen renderer.
@@ -30,7 +70,7 @@ export class Renderer {
   private readonly bloomCtx: CanvasRenderingContext2D;
   private readonly ctx: CanvasRenderingContext2D;
   private flashIntensity = 0;
-  public showTemperature = false;
+  public heatMode: HeatMode = 'off';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -90,7 +130,7 @@ export class Renderer {
    * Call this first, then draw overlays, then `renderPostProcess()`.
    */
   renderGrid(shakeX = 0, shakeY = 0): void {
-    const { grid, buffer, bloomBuffer, field, showTemperature, visualLookups } = this;
+    const { grid, buffer, bloomBuffer, field, heatMode, visualLookups } = this;
     const data = buffer.data;
     const bloomData = bloomBuffer.data;
     const cells = grid.cells;
@@ -101,6 +141,9 @@ export class Renderer {
     const copperId = visualLookups.copperId;
     const ironId = visualLookups.ironId;
 
+    const tintMode = heatMode === 'tint';
+    const heatmapMode = heatMode === 'heatmap';
+
     let hasBloom = false;
 
     for (let i = 0; i < n; i++) {
@@ -108,12 +151,45 @@ export class Renderer {
       const id = cell & 0xfff;
       const p = i * 4;
 
+      // ── HEATMAP MODE — dominant palette, hides the material. ─────────
+      // Cheapest path: directly look up LUT by temperature byte.
+      if (heatmapMode) {
+        const t = temps[i];
+        const lutIdx = (t + 128) * 3;
+        data[p] = HEATMAP_LUT[lutIdx];
+        data[p + 1] = HEATMAP_LUT[lutIdx + 1];
+        data[p + 2] = HEATMAP_LUT[lutIdx + 2];
+        data[p + 3] = 255;
+        // Preserve bloom for hot cells so lava/fire still glow in heatmap view.
+        if (id !== 0) {
+          const life = getLife(cell);
+          let bAmt = bloomLookup[id];
+          if (life > 0 && (id === copperId || id === ironId)) {
+            const live = Math.min(1, life / 28);
+            if (live > bAmt) bAmt = live;
+          }
+          if (bAmt > 0) {
+            bloomData[p] = (data[p] * bAmt) | 0;
+            bloomData[p + 1] = (data[p + 1] * bAmt) | 0;
+            bloomData[p + 2] = (data[p + 2] * bAmt) | 0;
+            bloomData[p + 3] = Math.min(255, (bAmt * 255) | 0);
+            hasBloom = true;
+            continue;
+          }
+        }
+        bloomData[p] = 0;
+        bloomData[p + 1] = 0;
+        bloomData[p + 2] = 0;
+        bloomData[p + 3] = 0;
+        continue;
+      }
+
+      // ── NORMAL / TINT MODE ───────────────────────────────────────────
       if (id === 0) {
-        // Empty fast-path. Base ambient + optional thermal tint.
         let r = 10;
         let g = 10;
         let b = 11;
-        if (showTemperature) {
+        if (tintMode) {
           const t = temps[i];
           if (t > 3 || t < -3) {
             const tint = tempTint(t);
@@ -154,7 +230,7 @@ export class Renderer {
         b = clamp255(b + delta);
       }
 
-      if (showTemperature) {
+      if (tintMode) {
         const t = temps[i];
         if (t > 3 || t < -3) {
           const tint = tempTint(t);
@@ -169,7 +245,6 @@ export class Renderer {
       data[p + 2] = b;
       data[p + 3] = 255;
 
-      // Bloom contribution: static from lookup + dynamic for charged conductors.
       let bAmt = bloomLookup[id];
       if (life > 0 && (id === copperId || id === ironId)) {
         const live = Math.min(1, life / 28);

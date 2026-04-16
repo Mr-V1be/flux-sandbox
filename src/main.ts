@@ -174,7 +174,7 @@ const bootstrap = () => {
   mountHelpOverlay(document.getElementById('help') as HTMLElement);
 
   store.subscribe((s, prev) => {
-    if (s.showTemperature !== prev.showTemperature) renderer.showTemperature = s.showTemperature;
+    if (s.heatMode !== prev.heatMode) renderer.heatMode = s.heatMode;
     if (s.drawerOpen !== prev.drawerOpen) {
       document.body.dataset.drawerOpen = s.drawerOpen ? 'true' : 'false';
     }
