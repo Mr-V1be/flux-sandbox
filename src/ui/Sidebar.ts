@@ -115,7 +115,9 @@ export class Sidebar {
     btn.dataset.key = el.key;
     btn.className =
       'group flex items-center gap-2 px-2 py-1.5 rounded-md border border-neutral-800/60 bg-neutral-900/40 hover:bg-neutral-800/60 text-left transition-colors text-xs';
-    btn.title = el.description ?? el.label;
+    // Skip `title` attr — the native browser tooltip clashes visually with
+    // our custom recipes popup. Description already surfaces there.
+    btn.setAttribute('aria-label', el.description ?? el.label);
 
     const swatch = document.createElement('span');
     swatch.className =
