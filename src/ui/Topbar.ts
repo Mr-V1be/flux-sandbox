@@ -14,14 +14,27 @@ import {
   Replace,
   Share2,
   Menu,
+  Wrench,
+  Camera as CameraIcon,
+  Video,
+  Save,
+  FolderOpen,
 } from 'lucide';
 import { BrushShape, store } from '@/state/Store';
 import { Grid } from '@/core/Grid';
 import { TemperatureField } from '@/core/TemperatureField';
 import { Camera } from '@/rendering/Camera';
 import { scenarios } from '@/state/Scenarios';
-import { serialize } from '@/state/Serializer';
+import { serialize, deserialize } from '@/state/Serializer';
 import { showToast } from './Toast';
+import { downloadPng, downloadBlob, VideoRecorder } from '@/effects/Recorder';
+import {
+  clearSnapshot,
+  listSlots,
+  loadSnapshot,
+  saveSnapshot,
+  slotLabel,
+} from '@/state/Snapshots';
 
 const SHAPE_ICON: Record<BrushShape, string> = {
   circle: 'circle',
@@ -45,6 +58,7 @@ export class Topbar {
   private thermalBtn!: HTMLButtonElement;
   private shapeBtn!: HTMLButtonElement;
   private brushSlider!: HTMLInputElement;
+  private recorder!: VideoRecorder;
 
   constructor(
     private readonly root: HTMLElement,
@@ -83,6 +97,14 @@ export class Topbar {
           </button>
           <div data-menu-panel
             class="hidden absolute top-9 left-0 z-10 w-56 p-1 rounded-md border border-neutral-800 bg-[var(--color-panel)] shadow-xl">
+          </div>
+        </div>
+        <div class="relative" data-menu="tools">
+          <button data-act="tools" class="ui-btn" aria-label="Tools" title="Export / snapshots">
+            <i data-lucide="wrench"></i>
+          </button>
+          <div data-menu-panel
+            class="hidden absolute top-9 left-0 z-10 w-64 p-1 rounded-md border border-neutral-800 bg-[var(--color-panel)] shadow-xl">
           </div>
         </div>
 
@@ -180,7 +202,172 @@ export class Topbar {
     );
 
     this.wireScenarios();
+    this.wireTools();
     this.renderIcons();
+  }
+
+  private wireTools(): void {
+    const wrap = this.root.querySelector('[data-menu="tools"]') as HTMLElement;
+    const btn = wrap.querySelector('[data-act="tools"]') as HTMLButtonElement;
+    const panel = wrap.querySelector('[data-menu-panel]') as HTMLElement;
+    this.recorder = new VideoRecorder(document.getElementById('sim') as HTMLCanvasElement, 60);
+
+    const render = (): void => {
+      const supportsVideo = this.recorder.available;
+      const slots = listSlots();
+      panel.innerHTML = `
+        <div class="px-2 pt-2 pb-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">Export</div>
+        <button data-tool="png" class="tool-row">
+          <i data-lucide="camera"></i>
+          <span>Screenshot PNG</span>
+        </button>
+        <button data-tool="record" class="tool-row ${this.recorder.status === 'recording' ? 'recording' : ''}" ${
+          supportsVideo ? '' : 'disabled'
+        }>
+          <i data-lucide="video"></i>
+          <span>${this.recorder.status === 'recording' ? 'Stop recording' : supportsVideo ? 'Record video' : 'Video unsupported'}</span>
+        </button>
+        <button data-tool="exportfile" class="tool-row">
+          <i data-lucide="save"></i>
+          <span>Export .flux file</span>
+        </button>
+        <button data-tool="importfile" class="tool-row">
+          <i data-lucide="folder-open"></i>
+          <span>Import .flux file</span>
+        </button>
+        <div class="mx-2 my-1 h-px bg-neutral-800"></div>
+        <div class="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">Snapshots</div>
+        <div class="grid grid-cols-1 gap-0.5 px-1 pb-1">
+          ${slots
+            .map(
+              (s) => `
+                <div class="flex items-center gap-1">
+                  <button class="tool-row flex-1 text-left" data-tool="snap-save" data-idx="${s.idx}">
+                    <span class="text-neutral-100 font-medium mr-1.5">S${s.idx + 1}</span>
+                    <span class="text-[10px] text-neutral-500">${escapeHtml(slotLabel(s))}</span>
+                  </button>
+                  ${s.hasData ? `
+                    <button class="ui-btn h-7 w-7 shrink-0" data-tool="snap-load" data-idx="${s.idx}" title="Load slot">
+                      <i data-lucide="folder-open" class="h-3 w-3"></i>
+                    </button>
+                    <button class="ui-btn h-7 w-7 shrink-0" data-tool="snap-clear" data-idx="${s.idx}" title="Clear slot">
+                      <i data-lucide="eraser" class="h-3 w-3"></i>
+                    </button>
+                  ` : ''}
+                </div>`,
+            )
+            .join('')}
+        </div>
+      `;
+      createIcons({
+        icons: { CameraIcon, Video, Save, FolderOpen, Eraser, Wrench },
+      });
+      // Lucide "camera-icon" name in DOM is "camera"; relink.
+    };
+    render();
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panel.classList.contains('hidden')) render();
+      panel.classList.toggle('hidden');
+    });
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target as Node)) panel.classList.add('hidden');
+    });
+
+    panel.addEventListener('click', async (e) => {
+      const target = (e.target as HTMLElement).closest('[data-tool]') as HTMLElement | null;
+      if (!target) return;
+      const tool = target.dataset.tool!;
+      const idxRaw = target.dataset.idx;
+      const idx = idxRaw !== undefined ? parseInt(idxRaw, 10) : -1;
+
+      if (tool === 'png') {
+        try {
+          const canvas = document.getElementById('sim') as HTMLCanvasElement;
+          await downloadPng(canvas, `flux-${timestampFile()}.png`);
+          showToast('Screenshot saved', 'success');
+        } catch (err) {
+          showToast(`Screenshot failed: ${(err as Error).message}`, 'error');
+        }
+        panel.classList.add('hidden');
+      } else if (tool === 'record') {
+        this.recorder.toggle({
+          onStart: () => {
+            showToast('Recording… click again to stop', 'info', 2000);
+            render();
+          },
+          onStop: (blob) => {
+            if (blob) {
+              const ext = (blob.type.includes('mp4') ? 'mp4' : 'webm');
+              downloadBlob(blob, `flux-${timestampFile()}.${ext}`);
+              showToast(`Video saved (${Math.round(blob.size / 1024)} KB)`, 'success');
+            }
+            render();
+          },
+          onError: (err) => {
+            showToast(`Recording failed: ${err.message}`, 'error');
+            render();
+          },
+        });
+      } else if (tool === 'exportfile') {
+        try {
+          const encoded = await serialize(this.grid, this.field);
+          const bytes = base64UrlToBytes(encoded);
+          downloadBlob(
+            new Blob([bytes as BlobPart], { type: 'application/octet-stream' }),
+            `flux-${timestampFile()}.flux`,
+          );
+          showToast('File exported', 'success');
+          panel.classList.add('hidden');
+        } catch (err) {
+          showToast(`Export failed: ${(err as Error).message}`, 'error');
+        }
+      } else if (tool === 'importfile') {
+        this.pickFluxFile();
+        panel.classList.add('hidden');
+      } else if (tool === 'snap-save' && idx >= 0) {
+        try {
+          await saveSnapshot(idx, this.grid, this.field);
+          showToast(`Saved to slot ${idx + 1}`, 'success');
+          render();
+        } catch (err) {
+          showToast(`Save failed: ${(err as Error).message}`, 'error');
+        }
+      } else if (tool === 'snap-load' && idx >= 0) {
+        const res = await loadSnapshot(idx, this.grid, this.field);
+        if (res.ok) {
+          showToast(`Loaded slot ${idx + 1}`, 'success');
+          panel.classList.add('hidden');
+        } else {
+          showToast(`Load failed: ${res.reason}`, 'error');
+        }
+      } else if (tool === 'snap-clear' && idx >= 0) {
+        clearSnapshot(idx);
+        showToast(`Slot ${idx + 1} cleared`, 'info');
+        render();
+      }
+    });
+  }
+
+  private pickFluxFile(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.flux,application/octet-stream';
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const buf = new Uint8Array(await file.arrayBuffer());
+        const encoded = bytesToBase64Url(buf);
+        const res = await deserialize(encoded, this.grid, this.field);
+        if (res.ok) showToast(`Loaded ${file.name}`, 'success');
+        else showToast(`Load failed: ${res.reason}`, 'error');
+      } catch (err) {
+        showToast(`Import failed: ${(err as Error).message}`, 'error');
+      }
+    });
+    input.click();
   }
 
   private canvasCenter(): { x: number; y: number } {
@@ -245,7 +432,8 @@ export class Topbar {
     createIcons({
       icons: {
         Play, Pause, Eraser, Circle, Sparkles, ZoomIn, ZoomOut, Maximize2,
-        Flame, Square, Minus, Replace, Share2, Menu,
+        Flame, Square, Minus, Replace, Share2, Menu, Wrench,
+        CameraIcon, Video, Save, FolderOpen,
       },
     });
   }
@@ -274,3 +462,32 @@ export class Topbar {
     });
   }
 }
+
+// ─── module helpers ───────────────────────────────────────────────────
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const timestampFile = (): string => {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+};
+
+const bytesToBase64Url = (bytes: Uint8Array): string => {
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+const base64UrlToBytes = (b64url: string): Uint8Array => {
+  let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};

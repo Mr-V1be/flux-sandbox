@@ -78,6 +78,43 @@ canvas.sim {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 60px -20px rgba(0, 0, 0, 0.7);
 }
 
+/* Tools dropdown row */
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #e5e5e7;
+  font-size: 12px;
+  background: transparent;
+  transition: background 100ms ease;
+  cursor: pointer;
+  border: none;
+}
+.tool-row:hover:not([disabled]) {
+  background: rgba(244, 244, 245, 0.06);
+}
+.tool-row[disabled] {
+  color: #5a5a62;
+  cursor: not-allowed;
+}
+.tool-row.recording {
+  color: #f43f5e;
+  animation: pulse-red 1.2s ease-in-out infinite;
+}
+.tool-row i,
+.tool-row svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 /* Toast enter animation */
 @keyframes toast-in {
   from {
