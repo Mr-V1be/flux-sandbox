@@ -93,7 +93,61 @@ canvas.sim {
   animation: toast-in 180ms ease-out;
 }
 
-/* Slim scrollbar for sidebar. */
+/* ─── Mobile sidebar drawer ─────────────────────────────────────────── */
+/* Above 768px: sidebar is always-on, docked to the left.
+   Below 768px: sidebar slides off-screen by default and a burger toggles it. */
+
+@media (max-width: 767px) {
+  aside#sidebar {
+    position: fixed;
+    top: 48px;              /* topbar height */
+    bottom: 32px;           /* footer height */
+    left: 0;
+    width: 240px;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 200ms ease-out;
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+  body[data-drawer-open="true"] aside#sidebar {
+    transform: translateX(0);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  }
+  #drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 48px 0 32px 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 30;
+  }
+  body[data-drawer-open="true"] #drawer-overlay {
+    display: block;
+  }
+  /* Tighten topbar on narrow screens — hide brand text, shrink stats. */
+  header#topbar .brand-text {
+    display: none;
+  }
+  header#topbar .topbar-stats {
+    display: none;
+  }
+  header#topbar .topbar-actions {
+    gap: 4px;
+  }
+  /* Compact brush slider */
+  header#topbar input[data-ctrl="brush"] {
+    width: 64px;
+  }
+}
+
+/* Burger is only visible on mobile. */
+@media (min-width: 768px) {
+  .burger-btn {
+    display: none !important;
+  }
+}
+
+/* ─── Slim scrollbar for sidebar. ────────────────────────────────────── */
 .scroll-slim::-webkit-scrollbar {
   width: 8px;
 }

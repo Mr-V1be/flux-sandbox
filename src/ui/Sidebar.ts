@@ -129,7 +129,13 @@ export class Sidebar {
       btn.appendChild(kbd);
     }
 
-    btn.addEventListener('click', () => store.getState().setSelected(el.key));
+    btn.addEventListener('click', () => {
+      store.getState().setSelected(el.key);
+      // Auto-close the drawer on mobile after picking an element.
+      if (window.matchMedia('(max-width: 767px)').matches) {
+        store.getState().setDrawerOpen(false);
+      }
+    });
     btn.addEventListener('mouseenter', () => this.showTooltip(el, btn));
     btn.addEventListener('mouseleave', () => this.hideTooltip(el.key));
     return btn;

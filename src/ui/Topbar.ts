@@ -13,6 +13,7 @@ import {
   Minus,
   Replace,
   Share2,
+  Menu,
 } from 'lucide';
 import { BrushShape, store } from '@/state/Store';
 import { Grid } from '@/core/Grid';
@@ -59,14 +60,17 @@ export class Topbar {
   private build(): void {
     this.root.innerHTML = `
       <div class="flex items-center gap-2">
+        <button data-act="burger" class="ui-btn burger-btn" aria-label="Menu" title="Elements">
+          <i data-lucide="menu"></i>
+        </button>
         <div class="h-6 w-6 rounded-md bg-gradient-to-br from-neutral-200 to-neutral-500"></div>
-        <div class="flex flex-col leading-none">
+        <div class="flex flex-col leading-none brand-text">
           <span class="text-[11px] tracking-[0.22em] text-neutral-400 uppercase">Flux</span>
           <span class="text-sm font-semibold text-neutral-100">Sandbox</span>
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 topbar-actions">
         <button data-act="play" class="ui-btn" aria-label="Play/Pause" title="Pause (Space)">
           <i data-lucide="pause"></i>
         </button>
@@ -112,7 +116,7 @@ export class Topbar {
         </button>
       </div>
 
-      <div class="flex items-center gap-4 text-xs text-neutral-400 tabular-nums">
+      <div class="flex items-center gap-4 text-xs text-neutral-400 tabular-nums topbar-stats">
         <div class="flex items-center gap-1.5">
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
           <span data-out="fps">0</span> fps
@@ -145,6 +149,10 @@ export class Topbar {
     (this.root.querySelector('[data-act="share"]') as HTMLElement).addEventListener(
       'click',
       () => this.share(),
+    );
+    (this.root.querySelector('[data-act="burger"]') as HTMLElement).addEventListener(
+      'click',
+      () => store.getState().toggleDrawer(),
     );
     this.brushSlider.addEventListener('input', () => {
       store.getState().setBrush(Number(this.brushSlider.value));
@@ -237,7 +245,7 @@ export class Topbar {
     createIcons({
       icons: {
         Play, Pause, Eraser, Circle, Sparkles, ZoomIn, ZoomOut, Maximize2,
-        Flame, Square, Minus, Replace, Share2,
+        Flame, Square, Minus, Replace, Share2, Menu,
       },
     });
   }

@@ -38,6 +38,11 @@ export class InputController {
   private lastY: number | null = null;
   private lastClient: { x: number; y: number } | null = null;
 
+  /** Active pointers for multi-touch gestures (pinch + 2-finger pan). */
+  private pointers = new Map<number, { x: number; y: number }>();
+  private prevPinchDist: number | null = null;
+  private prevPinchCenter: { x: number; y: number } | null = null;
+
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly grid: Grid,
@@ -80,6 +85,18 @@ export class InputController {
 
   private onDown = (e: PointerEvent): void => {
     this.canvas.setPointerCapture(e.pointerId);
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Multi-touch: 2 active pointers → pinch-zoom + pan. Cancels paint.
+    if (this.pointers.size === 2) {
+      this.painting = false;
+      this.lineMode = false;
+      this.cursor.lineStart = null;
+      const [a, b] = Array.from(this.pointers.values());
+      this.prevPinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      this.prevPinchCenter = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      return;
+    }
 
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       this.panning = true;
@@ -111,6 +128,35 @@ export class InputController {
   };
 
   private onMove = (e: PointerEvent): void => {
+    if (this.pointers.has(e.pointerId)) {
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Pinch + pan while exactly two pointers are down.
+    if (this.pointers.size === 2 && this.prevPinchDist !== null) {
+      const pts = Array.from(this.pointers.values());
+      const a = pts[0]!;
+      const b = pts[1]!;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (dist > 0) {
+        const factor = dist / this.prevPinchDist;
+        const { x: sx, y: sy } = this.clientToCanvasPx(center.x, center.y);
+        this.camera.zoomAt(sx, sy, factor);
+      }
+      if (this.prevPinchCenter) {
+        const dpr = window.devicePixelRatio || 1;
+        this.camera.pan(
+          (center.x - this.prevPinchCenter.x) * dpr,
+          (center.y - this.prevPinchCenter.y) * dpr,
+        );
+      }
+      this.prevPinchDist = dist;
+      this.prevPinchCenter = center;
+      this.onCameraChanged();
+      return;
+    }
+
     const { x, y } = this.clientToGrid(e.clientX, e.clientY);
     this.cursor.x = x;
     this.cursor.y = y;
@@ -137,6 +183,12 @@ export class InputController {
   };
 
   private onUp = (e: PointerEvent): void => {
+    this.pointers.delete(e.pointerId);
+    // Exit pinch mode as soon as we drop below 2 pointers.
+    if (this.pointers.size < 2) {
+      this.prevPinchDist = null;
+      this.prevPinchCenter = null;
+    }
     if (this.lineMode) {
       const { x, y } = this.clientToGrid(e.clientX, e.clientY);
       const start = this.cursor.lineStart;

@@ -1,7 +1,13 @@
 import './styles.css';
 
 import { Simulation } from './core/Simulation';
-import { DEFAULT_HEIGHT, DEFAULT_WIDTH, EMPTY_ID } from './core/constants';
+import {
+  DEFAULT_HEIGHT,
+  DEFAULT_WIDTH,
+  EMPTY_ID,
+  MOBILE_WIDTH,
+  MOBILE_HEIGHT,
+} from './core/constants';
 import { registerAllElements } from './elements/definitions';
 import { registryArray } from './elements/registry';
 import { Renderer } from './rendering/Renderer';
@@ -34,15 +40,16 @@ const bootstrap = () => {
     <header id="topbar"
       class="shrink-0 h-12 px-4 flex items-center justify-between border-b border-neutral-800/70 bg-[var(--color-bg-soft)]"
     ></header>
-    <main class="flex-1 min-h-0 flex">
+    <main class="flex-1 min-h-0 flex relative">
       <aside id="sidebar"
         class="w-60 shrink-0 border-r border-neutral-800/70 bg-[var(--color-bg-soft)] px-3 py-4 overflow-y-auto scroll-slim"
       ></aside>
+      <div id="drawer-overlay"></div>
       <section class="flex-1 min-w-0 relative" id="stage">
         <canvas id="sim" class="sim absolute inset-0"></canvas>
       </section>
     </main>
-    <footer id="help" class="shrink-0 h-8 px-4 flex items-center border-t border-neutral-800/70 bg-[var(--color-bg-soft)]"></footer>
+    <footer id="help" class="shrink-0 h-8 px-3 flex items-center border-t border-neutral-800/70 bg-[var(--color-bg-soft)] overflow-x-auto scroll-slim"></footer>
   `;
 
   // ─── Effects ────────────────────────────────────────────────────────
@@ -95,14 +102,21 @@ const bootstrap = () => {
   });
 
   // ─── Simulation + view ─────────────────────────────────────────────
+  // Detect narrow / coarse-pointer devices and downsize the grid so
+  // we keep 60 FPS on phones without halving the element roster.
+  const isSmallDevice =
+    window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
+  const gridW = isSmallDevice ? MOBILE_WIDTH : DEFAULT_WIDTH;
+  const gridH = isSmallDevice ? MOBILE_HEIGHT : DEFAULT_HEIGHT;
+
   const simulation = new Simulation(
-    { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT, seed: Date.now() & 0xffffffff, bus },
+    { width: gridW, height: gridH, seed: Date.now() & 0xffffffff, bus },
     registryArray(),
   );
 
   const canvas = document.getElementById('sim') as HTMLCanvasElement;
   const stage = document.getElementById('stage') as HTMLElement;
-  const camera = new Camera(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+  const camera = new Camera(gridW, gridH);
   const renderer = new Renderer(canvas, simulation.grid, simulation.field, camera);
 
   const syncCameraState = () => {
@@ -145,7 +159,14 @@ const bootstrap = () => {
 
   store.subscribe((s, prev) => {
     if (s.showTemperature !== prev.showTemperature) renderer.showTemperature = s.showTemperature;
+    if (s.drawerOpen !== prev.drawerOpen) {
+      document.body.dataset.drawerOpen = s.drawerOpen ? 'true' : 'false';
+    }
   });
+
+  // Overlay closes the drawer when tapped.
+  const overlay = document.getElementById('drawer-overlay');
+  overlay?.addEventListener('click', () => store.getState().setDrawerOpen(false));
 
   // If the URL carries an encoded state (e.g. from the Share button), load it.
   const hash = window.location.hash;

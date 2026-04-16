@@ -13,6 +13,7 @@ export interface UiState {
   activeChunks: number;
   tick: number;
   showTemperature: boolean;
+  drawerOpen: boolean;
   zoom: number;
   setSelected(key: string): void;
   setBrush(size: number): void;
@@ -20,6 +21,8 @@ export interface UiState {
   cycleBrushShape(): void;
   togglePause(): void;
   toggleTemperature(): void;
+  toggleDrawer(): void;
+  setDrawerOpen(open: boolean): void;
   setStats(patch: Partial<Pick<UiState, 'fps' | 'activeCells' | 'activeChunks' | 'tick' | 'zoom'>>): void;
 }
 
@@ -33,6 +36,7 @@ export const store = createStore<UiState>((set) => ({
   activeChunks: 0,
   tick: 0,
   showTemperature: false,
+  drawerOpen: false,
   zoom: 1,
   setSelected: (key) => set({ selectedKey: key }),
   setBrush: (size) => set({ brushSize: Math.max(1, Math.min(64, size)) }),
@@ -43,6 +47,8 @@ export const store = createStore<UiState>((set) => ({
     })),
   togglePause: () => set((s) => ({ paused: !s.paused })),
   toggleTemperature: () => set((s) => ({ showTemperature: !s.showTemperature })),
+  toggleDrawer: () => set((s) => ({ drawerOpen: !s.drawerOpen })),
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
   setStats: (patch) => set(patch),
 }));
 
