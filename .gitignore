@@ -9,3 +9,5 @@ dist/
 coverage/
 .env
 .env.local
+playwright-report/
+test-results/

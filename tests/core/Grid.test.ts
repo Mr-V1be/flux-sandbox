@@ -42,6 +42,27 @@ describe('Grid', () => {
     expect(getElement(g.get(63, 63))).toBe(1);
   });
 
+  it('swap() also moves temperatures when a field is linked', () => {
+    const g = new Grid(8, 8, 4);
+    const field = { temps: new Int8Array(8 * 8) };
+    field.temps[g.index(0, 0)] = -100;
+    field.temps[g.index(7, 7)] = 50;
+    g.linkField(field);
+    g.setSilent(0, 0, encode(1));
+    g.setSilent(7, 7, encode(2));
+    g.swap(0, 0, 7, 7);
+    expect(field.temps[g.index(0, 0)]).toBe(50);
+    expect(field.temps[g.index(7, 7)]).toBe(-100);
+  });
+
+  it('swap() leaves temperatures alone when no field is linked', () => {
+    const g = new Grid(4, 4, 4);
+    g.setSilent(0, 0, encode(1));
+    g.setSilent(3, 3, encode(2));
+    // should not throw
+    expect(() => g.swap(0, 0, 3, 3)).not.toThrow();
+  });
+
   it('clear() empties cells and wakes every chunk next tick', () => {
     const g = new Grid(48, 48, 16);
     g.set(10, 10, encode(1));

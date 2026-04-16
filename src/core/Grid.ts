@@ -20,6 +20,14 @@ export class Grid implements GridApi {
   private activeNow: Uint8Array;
   private activeNext: Uint8Array;
 
+  /**
+   * Optional link to a parallel temperature field. When present, `swap`
+   * moves cells AND their temperatures together — so a cold water cell
+   * falling through warm air doesn't instantly reheat at its destination
+   * while leaving a phantom cold spot behind. Set via `linkField()`.
+   */
+  private field: { temps: Int8Array } | null = null;
+
   constructor(
     public readonly width: number,
     public readonly height: number,
@@ -62,8 +70,21 @@ export class Grid implements GridApi {
     const tmp = this.cells[ai];
     this.cells[ai] = this.cells[bi];
     this.cells[bi] = tmp;
+    // Temperature travels with the cell. Without this, cold water falling
+    // through warm air would leave its cold behind and instantly warm up.
+    if (this.field) {
+      const t = this.field.temps;
+      const tt = t[ai];
+      t[ai] = t[bi];
+      t[bi] = tt;
+    }
     this.wake(ax, ay);
     this.wake(bx, by);
+  }
+
+  /** Attach a temperature field so swaps move temperatures along with cells. */
+  linkField(field: { temps: Int8Array }): void {
+    this.field = field;
   }
 
   clear(): void {

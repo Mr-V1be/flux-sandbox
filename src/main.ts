@@ -252,6 +252,22 @@ const bootstrap = () => {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
+
+  // Test / debug hook. Exposes the live simulation, store and helpers
+  // so end-to-end tests can drive the app without synthesising input events.
+  // Safe to ship — does not mutate anything by itself.
+  (window as unknown as { flux: unknown }).flux = {
+    simulation,
+    store,
+    getIdByKey: (key: string) => {
+      // Lazy import to avoid a cycle during bootstrap.
+      const reg = registryArray();
+      for (let i = 0; i < reg.length; i++) {
+        if (reg[i]?.key === key) return i;
+      }
+      return -1;
+    },
+  };
 };
 
 bootstrap();

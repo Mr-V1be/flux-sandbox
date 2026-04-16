@@ -52,6 +52,8 @@ export class Simulation {
   ) {
     this.grid = new Grid(opts.width, opts.height);
     this.field = new TemperatureField(opts.width, opts.height);
+    // Let the grid's swap operation move temperatures alongside cells.
+    this.grid.linkField(this.field);
     this.lookups = buildThermalLookups(registry);
     const keyToId = new Map<string, number>();
     for (let i = 0; i < registry.length; i++) {
