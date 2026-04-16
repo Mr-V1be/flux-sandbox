@@ -1,5 +1,6 @@
 import { Grid } from '@/core/Grid';
 import { TemperatureField } from '@/core/TemperatureField';
+import { PressureField, PRESSURE_MAX, PRESSURE_MIN } from '@/core/PressureField';
 import { getLife, getVariant } from '@/core/types';
 import { registryArray } from '@/elements/registry';
 import { Camera } from './Camera';
@@ -63,6 +64,46 @@ const HEATMAP_LUT = (() => {
   return lut;
 })();
 
+// ─── pressure palette ──────────────────────────────────────────────────
+// Centred at 0 Pa (ambient = neutral grey), with deep blue for vacuum
+// and deep red for over-pressure. A dynamic range of ±2000 Pa covers the
+// vast majority of interesting play — bigger spikes still saturate at
+// those extremes so the eye can instantly read intensity.
+const PRESSURE_STOPS: Array<[number, number, number, number]> = [
+  [-10000, 10, 20, 110],
+  [-2000, 36, 70, 200],
+  [-500, 90, 140, 230],
+  [-100, 160, 195, 235],
+  [0, 200, 200, 210],
+  [100, 235, 190, 150],
+  [500, 250, 130, 80],
+  [2000, 220, 40, 40],
+  [10000, 110, 10, 20],
+];
+const PRESSURE_LUT_SIZE = 512;
+const PRESSURE_LUT_SCALE = (PRESSURE_LUT_SIZE - 1) / (PRESSURE_MAX - PRESSURE_MIN);
+const PRESSURE_LUT = (() => {
+  const lut = new Uint8ClampedArray(PRESSURE_LUT_SIZE * 3);
+  for (let i = 0; i < PRESSURE_LUT_SIZE; i++) {
+    const t = PRESSURE_MIN + i / PRESSURE_LUT_SCALE;
+    let a = PRESSURE_STOPS[0]!;
+    let b = PRESSURE_STOPS[PRESSURE_STOPS.length - 1]!;
+    for (let s = 0; s < PRESSURE_STOPS.length - 1; s++) {
+      if (t >= PRESSURE_STOPS[s]![0] && t <= PRESSURE_STOPS[s + 1]![0]) {
+        a = PRESSURE_STOPS[s]!;
+        b = PRESSURE_STOPS[s + 1]!;
+        break;
+      }
+    }
+    const span = b[0] - a[0];
+    const k = span > 0 ? (t - a[0]) / span : 0;
+    lut[i * 3 + 0] = Math.round(a[1] + (b[1] - a[1]) * k);
+    lut[i * 3 + 1] = Math.round(a[2] + (b[2] - a[2]) * k);
+    lut[i * 3 + 2] = Math.round(a[3] + (b[3] - a[3]) * k);
+  }
+  return lut;
+})();
+
 /**
  * Screen renderer.
  *
@@ -98,6 +139,7 @@ export class Renderer {
     private readonly canvas: HTMLCanvasElement,
     private readonly grid: Grid,
     private readonly field: TemperatureField,
+    private readonly pressure: PressureField,
     private readonly camera: Camera,
     private readonly visualLookups: VisualLookups,
   ) {
@@ -192,6 +234,8 @@ export class Renderer {
 
     const tintMode = heatMode === 'tint';
     const heatmapMode = heatMode === 'heatmap';
+    const pressureMode = heatMode === 'pressure';
+    const pressureData = pressureMode ? this.pressure.pressure : null;
 
     let hasBloom = false;
     let hasLight = false;
@@ -200,6 +244,30 @@ export class Renderer {
       const cell = cells[i];
       const id = cell & 0xfff;
       const p = i * 4;
+
+      // ── PRESSURE MODE — shockwave camera. ────────────────────────────
+      if (pressureMode) {
+        const pRaw = pressureData![i];
+        let bucket = ((pRaw - PRESSURE_MIN) * PRESSURE_LUT_SCALE) | 0;
+        if (bucket < 0) bucket = 0;
+        else if (bucket >= PRESSURE_LUT_SIZE) bucket = PRESSURE_LUT_SIZE - 1;
+        const lutIdx = bucket * 3;
+        data[p] = PRESSURE_LUT[lutIdx];
+        data[p + 1] = PRESSURE_LUT[lutIdx + 1];
+        data[p + 2] = PRESSURE_LUT[lutIdx + 2];
+        data[p + 3] = 255;
+        bloomData[p] = 0;
+        bloomData[p + 1] = 0;
+        bloomData[p + 2] = 0;
+        bloomData[p + 3] = 0;
+        if (lightingOn) {
+          lightingData[p] = 0;
+          lightingData[p + 1] = 0;
+          lightingData[p + 2] = 0;
+          lightingData[p + 3] = 0;
+        }
+        continue;
+      }
 
       // ── HEATMAP MODE — dominant palette, hides the material. ─────────
       if (heatmapMode) {

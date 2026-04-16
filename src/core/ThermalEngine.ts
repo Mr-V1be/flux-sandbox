@@ -56,7 +56,7 @@ export class ThermalEngine {
                 this.bus?.emit({ type: 'explosion', x, y, radius });
               } else {
                 grid.set(x, y, encode(this.fireId, 60));
-                field.set(x, y, 80);
+                field.set(x, y, 800);
                 this.bus?.emit({ type: 'ignition', x, y });
               }
               continue;
@@ -111,13 +111,13 @@ export class ThermalEngine {
         if (id === wall) continue;
         if (dist < radius * 0.5) {
           grid.set(x, y, encode(fire, 60));
-          field.set(x, y, 90);
+          field.set(x, y, 900);
         } else if (rand() < 0.4) {
           grid.set(x, y, encode(smoke, 220));
-          field.set(x, y, 40);
+          field.set(x, y, 300);
         } else {
           grid.set(x, y, encode(EMPTY_ID));
-          field.set(x, y, 30);
+          field.set(x, y, 200);
         }
       }
     }

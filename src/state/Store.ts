@@ -3,9 +3,15 @@ import { createStore } from 'zustand/vanilla';
 export type BrushShape = 'circle' | 'square' | 'spray' | 'line' | 'replace';
 export const BRUSH_SHAPES: BrushShape[] = ['circle', 'square', 'spray', 'line', 'replace'];
 
-/** Temperature visualisation mode cycled by pressing T. */
-export type HeatMode = 'off' | 'tint' | 'heatmap';
-export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap'];
+/**
+ * Overlay cycled by pressing T.
+ *   off       — default material view
+ *   tint      — cells blend toward hot/cold colour by their own temperature
+ *   heatmap   — everything replaced by °C colour (thermal camera)
+ *   pressure  — everything replaced by pressure colour (shockwave camera)
+ */
+export type HeatMode = 'off' | 'tint' | 'heatmap' | 'pressure';
+export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap', 'pressure'];
 
 /**
  * Lighting / day-night mode cycled by pressing N.

@@ -113,6 +113,10 @@ export interface FieldApi {
   add(x: number, y: number, delta: number): void;
 }
 
+export interface PressureApi {
+  pulse(cx: number, cy: number, radius: number, peak: number): void;
+}
+
 export interface ElementContext {
   readonly grid: GridApi;
   readonly field: FieldApi;
@@ -122,6 +126,10 @@ export interface ElementContext {
   readonly tick: number;
   rand(): number;
   markUpdated(x: number, y: number): void;
+  /** Optional — behaviours that cause explosions emit pulses here. */
+  readonly pressure?: PressureApi | null;
+  /** Optional — same as the sim's event bus, for emitting 'explosion' etc. */
+  readonly emit?: ((e: { type: string; x: number; y: number; radius?: number }) => void) | null;
 }
 
 export type ElementBehavior = (ctx: ElementContext) => void;

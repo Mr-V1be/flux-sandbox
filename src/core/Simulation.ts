@@ -1,6 +1,7 @@
 import { Grid } from './Grid';
 import { TemperatureField } from './TemperatureField';
 import { ThermalEngine } from './ThermalEngine';
+import { PressureField } from './PressureField';
 import { buildThermalLookups, ThermalLookups } from './Lookups';
 import {
   ElementContext,
@@ -37,10 +38,12 @@ export interface SimulationOptions {
 export class Simulation {
   public readonly grid: Grid;
   public readonly field: TemperatureField;
+  public readonly pressure: PressureField;
   public readonly thermal: ThermalEngine;
   public readonly lookups: ThermalLookups;
   public tick = 0;
   private readonly rand: () => number;
+  private readonly busEmit: ((e: { type: string; x: number; y: number; radius?: number }) => void) | null;
 
   constructor(
     opts: SimulationOptions,
@@ -52,6 +55,7 @@ export class Simulation {
   ) {
     this.grid = new Grid(opts.width, opts.height);
     this.field = new TemperatureField(opts.width, opts.height);
+    this.pressure = new PressureField(opts.width, opts.height, registry);
     // Let the grid's swap operation move temperatures alongside cells.
     this.grid.linkField(this.field);
     this.lookups = buildThermalLookups(registry);
@@ -62,12 +66,42 @@ export class Simulation {
     }
     this.thermal = new ThermalEngine(this.lookups, keyToId, opts.bus ?? null);
     this.rand = createRng(opts.seed ?? 0xc0ffee);
+
+    // Narrow adapter so behaviours can emit 'explosion' / 'ignition'
+    // without having to import the EventBus type.
+    const bus = opts.bus;
+    this.busEmit = bus
+      ? (e) => {
+          if (e.type === 'explosion' && typeof e.radius === 'number') {
+            bus.emit({ type: 'explosion', x: e.x, y: e.y, radius: e.radius });
+          } else if (e.type === 'ignition') {
+            bus.emit({ type: 'ignition', x: e.x, y: e.y });
+          } else if (e.type === 'zap') {
+            bus.emit({ type: 'zap', x: e.x, y: e.y });
+          }
+        }
+      : null;
+
+    // Explosions emit 'explosion' events on the bus — inject a pressure
+    // pulse so the shockwave pushes sand / liquid / debris radially
+    // outward, not just whatever was inside the crater. Peak pressure
+    // scales with the blast radius; reach is ~1.6x the crater.
+    opts.bus?.on((e) => {
+      if (e.type === 'explosion') {
+        this.pressure.pulse(e.x, e.y, Math.ceil(e.radius * 1.6), 800 + e.radius * 160);
+      }
+    });
   }
 
   step(): void {
     this.tick++;
     this.grid.swapActivity();
     this.grid.resetUpdatedFlags();
+
+    // Shockwave push FIRST — uses the previous tick's pressure field to
+    // displace movable cells along the gradient. Marking them `updated`
+    // prevents gravity/behaviours from double-moving the same cell.
+    this.pressure.advect(this.grid);
 
     const { width, height } = this.grid;
     const { chunkSize, chunksX, chunksY } = this.grid;
@@ -96,6 +130,7 @@ export class Simulation {
 
     this.field.diffuse(this.grid, this.lookups);
     this.thermal.apply(this.grid, this.field, this.rand);
+    this.pressure.diffuse(this.grid);
   }
 
   private updateCell(x: number, y: number): void {
@@ -122,6 +157,8 @@ export class Simulation {
         cell,
         tick: this.tick,
         rand: this.rand,
+        pressure: this.pressure,
+        emit: this.busEmit,
         markUpdated: (mx, my) => {
           if (!grid.inBounds(mx, my)) return;
           // Set the flag on the underlying typed array so we don't re-wake

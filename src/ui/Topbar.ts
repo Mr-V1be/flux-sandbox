@@ -507,13 +507,16 @@ export class Topbar {
 
       this.thermalBtn.classList.remove('is-active', 'is-heatmap');
       if (s.heatMode === 'tint') this.thermalBtn.classList.add('is-active');
-      else if (s.heatMode === 'heatmap') this.thermalBtn.classList.add('is-heatmap');
+      else if (s.heatMode === 'heatmap' || s.heatMode === 'pressure')
+        this.thermalBtn.classList.add('is-heatmap');
       this.thermalBtn.title =
         s.heatMode === 'off'
-          ? 'Heat overlay off (T cycles)'
+          ? 'Overlay off (T cycles: tint → heat map → pressure → off)'
           : s.heatMode === 'tint'
-            ? 'Tint overlay (T to switch to heat map)'
-            : 'Heat map (T to turn off)';
+            ? 'Tint overlay — per-cell temperature hint (T next)'
+            : s.heatMode === 'heatmap'
+              ? 'Heat map — °C of every cell (T next: pressure)'
+              : 'Pressure map — Pa of every cell (T to turn off)';
 
       this.lightBtn.classList.remove('is-active', 'is-heatmap');
       if (s.lightMode === 'dusk') this.lightBtn.classList.add('is-active');

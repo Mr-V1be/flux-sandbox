@@ -134,6 +134,7 @@ const bootstrap = () => {
     canvas,
     simulation.grid,
     simulation.field,
+    simulation.pressure,
     camera,
     visualLookups,
   );

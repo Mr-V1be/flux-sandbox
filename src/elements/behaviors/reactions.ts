@@ -124,6 +124,8 @@ export const explosiveReaction = (radius: number, chance = 1): ElementBehavior =
 };
 
 export const explode = (ctx: ElementContext, radius: number): void => {
+  const fireId = getIdByKey('fire');
+  const smokeId = getIdByKey('smoke');
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const nx = ctx.x + dx;
@@ -135,14 +137,20 @@ export const explode = (ctx: ElementContext, radius: number): void => {
       if (!nd) continue;
       if (nd.key === 'wall' || nd.key === 'stone') continue;
       if (dist < radius * 0.5) {
-        ctx.grid.set(nx, ny, encode(getIdByKey('fire'), 60));
+        ctx.grid.set(nx, ny, encode(fireId, 60));
+        ctx.field.set(nx, ny, 900);
       } else if (ctx.rand() < 0.4) {
-        ctx.grid.set(nx, ny, encode(getIdByKey('smoke'), 220));
+        ctx.grid.set(nx, ny, encode(smokeId, 220));
+        ctx.field.set(nx, ny, 300);
       } else {
         ctx.grid.set(nx, ny, encode(EMPTY_ID));
+        ctx.field.set(nx, ny, 200);
       }
     }
   }
+  // Broadcast so effects / particles / screen-shake hear about it, and the
+  // pressure field gets its radial pulse from the Simulation-level listener.
+  ctx.emit?.({ type: 'explosion', x: ctx.x, y: ctx.y, radius });
 };
 
 /** Plant: grows along adjacent water. */
