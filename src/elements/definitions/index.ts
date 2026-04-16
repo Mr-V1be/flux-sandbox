@@ -85,10 +85,11 @@ const defs: ElementDefinition[] = [
     density: 0,
     hotkey: 'E',
     description: 'Erase / clear cells.',
-    // Air conducts heat visibly (~wood range) but loses it slowly to an
-    // infinite ambient sink so a room can actually "warm up" instead of
-    // having every degree instantly absorbed.
-    thermal: { conductivity: 0.020, emitTemp: 0, emitStrength: 0.004 },
+    // Air is a *weak* conductor but a *very gentle* sink toward ambient.
+    // A strong emit would flatten hot / cold zones within half a second;
+    // at 0.0012 the half-life is ~10 seconds which is what the eye reads
+    // as "the room is cold", not "a ghost of cold is quickly fading".
+    thermal: { conductivity: 0.020, emitTemp: 0, emitStrength: 0.0012, heatCapacity: 0.15 },
   },
   {
     id: 1,
@@ -100,7 +101,7 @@ const defs: ElementDefinition[] = [
     density: 1000,
     hotkey: 'W',
     description: 'Indestructible barrier. Thermally inert.',
-    thermal: { conductivity: 0.002 },
+    thermal: { conductivity: 0.002, heatCapacity: 5.0 },
   },
   {
     id: 2,
@@ -111,7 +112,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 14,
     density: 900,
     description: 'Hardened rock. Formed when lava meets water.',
-    thermal: { conductivity: 0.045 },
+    thermal: { conductivity: 0.045, heatCapacity: 3.0 },
   },
   {
     id: 3,
@@ -124,7 +125,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'S',
     description: 'Classic powder. Melts into glass near lava; mixes with water into mud.',
     update: compose(createPowderBehavior(60), sandWetReaction),
-    thermal: { conductivity: 0.030 },
+    thermal: { conductivity: 0.030, heatCapacity: 2.0 },
   },
   {
     id: 4,
@@ -139,6 +140,7 @@ const defs: ElementDefinition[] = [
     update: createLiquidBehavior(30, 6),
     thermal: {
       conductivity: 0.060,
+      heatCapacity: 3.0,
       freezeAt: -5,
       freezesInto: 'ice',
       boilAt: 90,
@@ -186,6 +188,7 @@ const defs: ElementDefinition[] = [
     update: compose(createLiquidBehavior(80, 2), lavaReaction),
     thermal: {
       conductivity: 0.130,
+      heatCapacity: 2.5,
       emitTemp: 110,
       emitStrength: 0.20,
       freezeAt: 40,
@@ -203,7 +206,7 @@ const defs: ElementDefinition[] = [
     hotkey: 'F',
     description: 'Self-extinguishing heat at 90°. Spreads through flammables.',
     update: fireReaction,
-    thermal: { conductivity: 0.150, emitTemp: 90, emitStrength: 0.25 },
+    thermal: { conductivity: 0.150, heatCapacity: 0.5, emitTemp: 90, emitStrength: 0.25 },
   },
   {
     id: 9,
@@ -215,7 +218,7 @@ const defs: ElementDefinition[] = [
     density: 2,
     description: 'Rises and fades.',
     update: createGasBehavior({ density: 2, decayChance: 0.006 }),
-    thermal: { conductivity: 0.015 },
+    thermal: { conductivity: 0.015, heatCapacity: 0.3 },
   },
   {
     id: 10,
@@ -227,7 +230,7 @@ const defs: ElementDefinition[] = [
     density: 3,
     description: 'Condenses back into water below 50°.',
     update: createGasBehavior({ density: 3, decayChance: 0.0015 }),
-    thermal: { conductivity: 0.030, condenseAt: 50, condensesInto: 'water' },
+    thermal: { conductivity: 0.030, heatCapacity: 0.4, condenseAt: 50, condensesInto: 'water' },
   },
   {
     id: 11,
@@ -258,7 +261,7 @@ const defs: ElementDefinition[] = [
     flammable: true,
     burnChance: 0.15,
     description: 'Ignites above 75°.',
-    thermal: { conductivity: 0.020, ignitesAt: 75 },
+    thermal: { conductivity: 0.020, heatCapacity: 2.0, ignitesAt: 75 },
   },
   {
     id: 13,
@@ -287,6 +290,7 @@ const defs: ElementDefinition[] = [
     description: 'Melts above 3°.',
     thermal: {
       conductivity: 0.080,
+      heatCapacity: 2.0,
       emitTemp: -15,
       emitStrength: 0.10,
       meltAt: 3,
@@ -302,7 +306,7 @@ const defs: ElementDefinition[] = [
     colorVariance: 6,
     density: 850,
     description: 'Sand + lava.',
-    thermal: { conductivity: 0.040 },
+    thermal: { conductivity: 0.040, heatCapacity: 2.5 },
   },
   {
     id: 16,
@@ -534,7 +538,7 @@ const defs: ElementDefinition[] = [
     description: 'Conducts electricity. Glows when charged. High heat conductivity.',
     update: conductorBehavior,
     renderColor: conductorRenderColor(0xb2632a, 0xfff1a8),
-    thermal: { conductivity: 0.220 },
+    thermal: { conductivity: 0.220, heatCapacity: 1.0 },
   },
   {
     id: 33,
@@ -547,7 +551,7 @@ const defs: ElementDefinition[] = [
     description: 'Conductive, magnetic metal. Attracted by magnets.',
     update: conductorBehavior,
     renderColor: conductorRenderColor(0x7d7d86, 0xe8edff),
-    thermal: { conductivity: 0.180 },
+    thermal: { conductivity: 0.180, heatCapacity: 1.2 },
   },
   {
     id: 34,
@@ -692,6 +696,7 @@ const defs: ElementDefinition[] = [
     update: createLiquidBehavior(32, 4),
     thermal: {
       conductivity: 0.180,
+      heatCapacity: 2.5,
       emitTemp: -80,
       emitStrength: 0.20,
       boilAt: -40,

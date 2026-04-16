@@ -30,6 +30,8 @@ export const MAX_DELTA_PER_TICK = 48;
 export interface ThermalLookups {
   /** Thermal conductivity 0..0.25. */
   conductivity: Float32Array;
+  /** Inverse heat capacity (1 / capacity) — used to divide incoming flux. */
+  invHeatCapacity: Float32Array;
   /**
    * Precomputed per-pair edge coefficient, indexed by `a * size + b`.
    * Uses harmonic mean (physically correct for series heat transfer)
@@ -89,6 +91,10 @@ export const buildThermalLookups = (
   const size = maxId + 1;
 
   const conductivity = new Float32Array(size);
+  const invHeatCapacity = new Float32Array(size);
+  // Precompute 1/capacity so the hot loop uses a multiply, not a divide.
+  // Default capacity = 1.0 (inverse 1.0).
+  for (let i = 0; i < size; i++) invHeatCapacity[i] = 1.0;
   const emitTemp = new Int8Array(size);
   const emitStrength = new Float32Array(size);
   const hasEmit = new Uint8Array(size);
@@ -126,6 +132,9 @@ export const buildThermalLookups = (
     }
     hasThermal[id] = 1;
     conductivity[id] = clamp(p.conductivity, 0, 0.5);
+    if (p.heatCapacity !== undefined && p.heatCapacity > 0) {
+      invHeatCapacity[id] = 1 / p.heatCapacity;
+    }
     void MAX_DELTA_PER_TICK;
     if (p.emitTemp !== undefined) {
       emitTemp[id] = p.emitTemp;
@@ -192,6 +201,7 @@ export const buildThermalLookups = (
 
   return {
     conductivity,
+    invHeatCapacity,
     edgeK,
     edgeKSize: size,
     emitTemp,

@@ -64,6 +64,7 @@ export class TemperatureField {
     buffer.set(temps);
 
     const edgeK = lu.edgeK;
+    const invHeatCapacity = lu.invHeatCapacity;
     const size = lu.edgeKSize;
     const emitTemp = lu.emitTemp;
     const emitStrength = lu.emitStrength;
@@ -106,6 +107,11 @@ export class TemperatureField {
               const nid = cells[n] & 0xfff;
               sum += edgeK[rowInEdge + nid] * (temps[n] - t);
             }
+
+            // Scale by 1/heatCapacity: high-capacity cells (water, stone)
+            // resist temperature change; low-capacity cells (air, gases)
+            // swing fast. Same energy flux, different dT.
+            sum *= invHeatCapacity[id];
 
             // Clamp per-tick delta for a second layer of stability and
             // "feel" — a single neighbour can't instantly reshape a cell.

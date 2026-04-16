@@ -49,6 +49,19 @@ export type Category = 'empty' | 'solid' | 'powder' | 'liquid' | 'gas' | 'specia
 export interface ThermalProfile {
   /** Thermal conductivity 0..0.5. Higher = exchanges heat faster with neighbors. */
   conductivity: number;
+  /**
+   * Relative heat capacity. Incoming thermal energy is divided by this
+   * value, so a higher capacity means the cell resists temperature
+   * change for the same amount of flux. Think: water holds its heat,
+   * air flips hot/cold instantly. Default 1.0.
+   *
+   *   ~0.15 — air                    (flips almost instantly)
+   *   ~0.3  — other gases / foam
+   *   1.0   — metals, base materials
+   *   2.0   — sand, ice, wood, lava  (solid thermal mass)
+   *   3.0   — water, stone, wall     (high-inertia reservoirs)
+   */
+  heatCapacity?: number;
   /** If set, the cell resets toward this temp each tick (heat source / sink). */
   emitTemp?: number;
   /** Strength with which emitTemp pulls the cell (0..1). Default 1 (hard reset). */

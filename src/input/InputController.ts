@@ -399,15 +399,22 @@ export class InputController {
         } else {
           // Normal painting never overwrites existing matter — additive only.
           if (existing !== 0) continue;
-          if (!sparsePick()) continue;
+          if (!sparsePick()) {
+            // The brush footprint is intentionally porous for powders /
+            // liquids / gases / special elements, but the *temperature*
+            // should still read as the user intends. Stamp it on skipped
+            // cells too so a "cold stroke" leaves a visible cold halo
+            // in the brush area instead of requiring the user to also
+            // drag the eraser.
+            this.field.set(x, y, state.paintTemp);
+            continue;
+          }
         }
 
         const variant = (Math.random() * 255) | 0;
         this.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, variant));
         // Stamp the brush's current paint temperature onto the cell —
         // for fresh matter, for replaced cells, and for erased cells too.
-        // That makes the eraser double as a "temperature brush": sweep it
-        // across empty space with the slider cold and the air is cold.
         this.field.set(x, y, state.paintTemp);
       }
     }
