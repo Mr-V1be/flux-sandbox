@@ -1,0 +1,25 @@
+{
+  "name": "flux-sandbox",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Falling-sand cellular automaton with thermal field, chunked simulation, and 54 materials.",
+  "author": "Mr-V1be",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide": "^0.460.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}
