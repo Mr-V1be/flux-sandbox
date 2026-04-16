@@ -12,12 +12,15 @@ import {
   Square,
   Minus,
   Replace,
+  Share2,
 } from 'lucide';
 import { BrushShape, store } from '@/state/Store';
 import { Grid } from '@/core/Grid';
 import { TemperatureField } from '@/core/TemperatureField';
 import { Camera } from '@/rendering/Camera';
 import { scenarios } from '@/state/Scenarios';
+import { serialize } from '@/state/Serializer';
+import { showToast } from './Toast';
 
 const SHAPE_ICON: Record<BrushShape, string> = {
   circle: 'circle',
@@ -104,6 +107,9 @@ export class Topbar {
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">
           <i data-lucide="flame"></i>
         </button>
+        <button data-act="share" class="ui-btn" aria-label="Share" title="Copy shareable link">
+          <i data-lucide="share-2"></i>
+        </button>
       </div>
 
       <div class="flex items-center gap-4 text-xs text-neutral-400 tabular-nums">
@@ -136,6 +142,10 @@ export class Topbar {
     );
     this.thermalBtn.addEventListener('click', () => store.getState().toggleTemperature());
     this.shapeBtn.addEventListener('click', () => store.getState().cycleBrushShape());
+    (this.root.querySelector('[data-act="share"]') as HTMLElement).addEventListener(
+      'click',
+      () => this.share(),
+    );
     this.brushSlider.addEventListener('input', () => {
       store.getState().setBrush(Number(this.brushSlider.value));
     });
@@ -201,11 +211,33 @@ export class Topbar {
     });
   }
 
+  private async share(): Promise<void> {
+    try {
+      const encoded = await serialize(this.grid, this.field);
+      const url = `${location.origin}${location.pathname}#s=${encoded}`;
+      const sizeKb = Math.round(url.length / 1024);
+      // Warn if URL is absurdly long (pathological but possible).
+      if (url.length > 200_000) {
+        showToast(`Link is very large (${sizeKb} KB) — may not paste everywhere`, 'error', 3500);
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        showToast(`Link copied (${sizeKb} KB)`, 'success');
+      } else {
+        // Fallback: put it in the address bar so user can copy manually.
+        location.hash = `s=${encoded}`;
+        showToast('Clipboard unavailable — URL updated in address bar', 'info');
+      }
+    } catch (e) {
+      showToast(`Share failed: ${e instanceof Error ? e.message : e}`, 'error');
+    }
+  }
+
   private renderIcons(): void {
     createIcons({
       icons: {
         Play, Pause, Eraser, Circle, Sparkles, ZoomIn, ZoomOut, Maximize2,
-        Flame, Square, Minus, Replace,
+        Flame, Square, Minus, Replace, Share2,
       },
     });
   }

@@ -78,6 +78,21 @@ canvas.sim {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 60px -20px rgba(0, 0, 0, 0.7);
 }
 
+/* Toast enter animation */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.animate-toast {
+  animation: toast-in 180ms ease-out;
+}
+
 /* Slim scrollbar for sidebar. */
 .scroll-slim::-webkit-scrollbar {
   width: 8px;

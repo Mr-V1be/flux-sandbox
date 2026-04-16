@@ -16,6 +16,8 @@ import { getElement } from './core/types';
 import { EventBus } from './effects/EventBus';
 import { ParticleSystem } from './effects/Particles';
 import { ScreenShake } from './effects/ScreenShake';
+import { deserialize } from './state/Serializer';
+import { showToast } from './ui/Toast';
 
 /**
  * Bootstraps the app.
@@ -144,6 +146,18 @@ const bootstrap = () => {
   store.subscribe((s, prev) => {
     if (s.showTemperature !== prev.showTemperature) renderer.showTemperature = s.showTemperature;
   });
+
+  // If the URL carries an encoded state (e.g. from the Share button), load it.
+  const hash = window.location.hash;
+  if (hash.startsWith('#s=')) {
+    const encoded = hash.slice(3);
+    deserialize(encoded, simulation.grid, simulation.field)
+      .then((res) => {
+        if (res.ok) showToast('Loaded shared scene', 'success');
+        else showToast(`Could not load scene: ${res.reason}`, 'error', 4000);
+      })
+      .catch((e) => showToast(`Load failed: ${e}`, 'error'));
+  }
 
   // ─── Main loop ─────────────────────────────────────────────────────
   let lastTime = performance.now();
