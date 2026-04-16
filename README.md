@@ -4,9 +4,13 @@
 
 **A falling-sand cellular automaton with a thermal field, chunked simulation, and 54 reactive materials.**
 
+### [▶ Play live](https://mr-v1be.github.io/flux-sandbox/)
+
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss&logoColor=white)
+[![CI](https://github.com/Mr-V1be/flux-sandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-V1be/flux-sandbox/actions/workflows/ci.yml)
+[![Deploy](https://github.com/Mr-V1be/flux-sandbox/actions/workflows/deploy.yml/badge.svg)](https://github.com/Mr-V1be/flux-sandbox/actions/workflows/deploy.yml)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
 </div>
@@ -37,6 +41,7 @@ The resulting playground supports everything from classic sand + water + lava, t
 - **Scenarios** for quick demos: Volcano, Reactor, Portal Loop, Acid Rain, Ice Cavern, Chem Lab, Mayhem.
 - **Brush shapes** — circle, square, spray, line (rubber-band), replace — plus an element pipette (Ctrl + click).
 - **Visual feedback** — event-driven particles and screen shake on every explosion.
+- **Shareable URLs** — scene is serialized with `CompressionStream('gzip')`, base64url-encoded into the URL hash. Paste the link, the scene loads byte-for-byte.
 
 ## Tech stack
 
@@ -83,6 +88,7 @@ pnpm preview
 | Clear                   | `C`                               |
 | Fit view                | `F`                               |
 | Heat overlay            | `T`                               |
+| Copy shareable link     | Share button in the top bar       |
 | Element quick-select    | `S` sand · `D` water · `F` fire · `L` lava · `A` acid · `O` oil · `I` ice · `P` plant · `G` gas · `W` wall · `E` eraser |
 
 ## Architecture
@@ -135,6 +141,18 @@ bit  28         updated flag       (per-tick dedup)
 ```
 
 A parallel `Int8Array` holds per-cell temperature; diffusion ping-pongs through an `Int16` buffer to preserve precision.
+
+### Share format
+
+The Share button packs the simulation state as:
+
+```
+[4 bytes magic "FLX1"][4 bytes width][4 bytes height][4 bytes version]
+[w*h * 4 bytes cells (Uint32)]
+[w*h * 1 byte   temperature (Int8)]
+```
+
+The whole buffer is gzipped through the browser's native `CompressionStream('gzip')`, base64url-encoded, and written to `location.hash`. On load, any `#s=…` hash is decoded, verified, and applied to the running grid. A typical scene packs into ~10–60 KB of URL.
 
 ### Hot-path rules
 
