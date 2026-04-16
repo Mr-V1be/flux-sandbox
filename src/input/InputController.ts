@@ -404,9 +404,11 @@ export class InputController {
 
         const variant = (Math.random() * 255) | 0;
         this.grid.set(x, y, encode(id, def.key === 'fire' ? 60 : 0, variant));
-        // Stamp the brush's current paint temperature onto the fresh cell
-        // so "20° sand next to a red-hot wire" behaves intuitively.
-        if (!erasing) this.field.set(x, y, state.paintTemp);
+        // Stamp the brush's current paint temperature onto the cell —
+        // for fresh matter, for replaced cells, and for erased cells too.
+        // That makes the eraser double as a "temperature brush": sweep it
+        // across empty space with the slider cold and the air is cold.
+        this.field.set(x, y, state.paintTemp);
       }
     }
   }
