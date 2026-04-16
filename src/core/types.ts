@@ -44,7 +44,7 @@ export type Category = 'empty' | 'solid' | 'powder' | 'liquid' | 'gas' | 'specia
 /**
  * Thermal profile — purely declarative.
  * The ThermalEngine reads these to decide temperature-driven state changes.
- * Units are an abstract "game temperature" on an Int8 range (-128..127).
+ * Temperatures are in °C, stored as Int16 (TEMP_MIN..TEMP_MAX in Lookups.ts).
  */
 export interface ThermalProfile {
   /** Thermal conductivity 0..0.5. Higher = exchanges heat faster with neighbors. */
@@ -52,9 +52,8 @@ export interface ThermalProfile {
   /**
    * The material's natural temperature when it enters the world. Lava
    * arrives molten, ice arrives frozen, cryo arrives liquid-nitrogen
-   * cold. Most mundane materials default to 20° (room temperature).
-   * The user's paint-temp slider auto-syncs to this value when an
-   * element is selected, and then behaves as an override when dragged.
+   * cold. Materials without a spawnTemp inherit the ambient-slider value
+   * at paint time (so sand in a warm room spawns warm).
    */
   spawnTemp?: number;
   /**

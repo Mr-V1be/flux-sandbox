@@ -11,6 +11,7 @@ import { registerAllElements } from './elements/definitions';
 import { getDefinitionByKey, getIdByKey, registryArray } from './elements/registry';
 import { resolveSpawnTemp } from './core/spawnTemp';
 import { encode } from './core/types';
+import { TEMP_MAX, TEMP_MIN } from './core/Lookups';
 import { Renderer } from './rendering/Renderer';
 import { Camera } from './rendering/Camera';
 import { drawBrushCursor } from './rendering/BrushCursor';
@@ -189,7 +190,7 @@ const bootstrap = () => {
     // is sub-integer per tick and would round to zero in the Int8 field.
     if (s.ambientTemp !== prev.ambientTemp) {
       const clamped =
-        s.ambientTemp < -128 ? -128 : s.ambientTemp > 127 ? 127 : s.ambientTemp | 0;
+        s.ambientTemp < TEMP_MIN ? TEMP_MIN : s.ambientTemp > TEMP_MAX ? TEMP_MAX : s.ambientTemp | 0;
       simulation.lookups.emitTemp[emptyId] = clamped;
       const cells = simulation.grid.cells;
       const temps = simulation.field.temps;

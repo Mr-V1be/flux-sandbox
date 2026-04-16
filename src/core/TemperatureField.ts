@@ -1,33 +1,35 @@
 import { Grid } from './Grid';
-import { MAX_DELTA_PER_TICK, ThermalLookups } from './Lookups';
+import { MAX_DELTA_PER_TICK, TEMP_MAX, TEMP_MIN, ThermalLookups } from './Lookups';
 import { getElement } from './types';
 
 /**
- * Temperature field — one signed byte of temperature per cell.
+ * Temperature field — one signed 16-bit temperature per cell, in °C.
  *
  * Heat equation (forward-Euler, 4-neighbour 2D Laplacian):
  *
  *     T'(x,y) = T(x,y) + Σ_n  k_pair(T, n) · (T_n − T)
  *
  * where `k_pair(a, b)` is a precomputed harmonic mean of each pair's
- * conductivity (series heat transfer), clamped at `MAX_EDGE_K` so the
- * scheme is stable for all 4-neighbour sums. The per-tick delta is
- * additionally clipped at `MAX_DELTA_PER_TICK` to suppress worst-case
- * spikes when a cell is surrounded by very hot neighbours.
+ * conductivity (series heat transfer), clamped at `MAX_EDGE_K`. The flux
+ * is then divided by the destination cell's heat capacity and the total
+ * per-tick delta is clipped at `MAX_DELTA_PER_TICK` to keep marginally
+ * stable mixes (low-capacity air next to metal) well-behaved.
  *
- * Heat emitters (lava, torch, ice, cryo, empty=ambient) then pull each
- * emitter cell a fraction `emitStrength` toward its `emitTemp`.
- *
- * Cells flagged as "noticeable" (|T| > 3°) wake their chunk next tick
- * so a heat front can cross chunk boundaries it wasn't active in yet.
+ * Cells whose temperature reads noticeably non-ambient wake their chunk
+ * next tick so a heat front can cross chunk boundaries it wasn't active
+ * in yet.
  */
+
+/** Wake-up threshold in °C — |t| below this is treated as ambient noise. */
+const WAKE_THRESHOLD = 8;
+
 export class TemperatureField {
-  public readonly temps: Int8Array;
-  private readonly buffer: Int16Array;
+  public readonly temps: Int16Array;
+  private readonly buffer: Int32Array;
 
   constructor(public readonly width: number, public readonly height: number) {
-    this.temps = new Int8Array(width * height);
-    this.buffer = new Int16Array(width * height);
+    this.temps = new Int16Array(width * height);
+    this.buffer = new Int32Array(width * height);
   }
 
   index(x: number, y: number): number {
@@ -39,14 +41,14 @@ export class TemperatureField {
   }
 
   set(x: number, y: number, t: number): void {
-    const v = t < -128 ? -128 : t > 127 ? 127 : t | 0;
+    const v = t < TEMP_MIN ? TEMP_MIN : t > TEMP_MAX ? TEMP_MAX : t | 0;
     this.temps[this.index(x, y)] = v;
   }
 
   add(x: number, y: number, delta: number): void {
     const idx = this.index(x, y);
     const v = this.temps[idx] + delta;
-    this.temps[idx] = v < -128 ? -128 : v > 127 ? 127 : v | 0;
+    this.temps[idx] = v < TEMP_MIN ? TEMP_MIN : v > TEMP_MAX ? TEMP_MAX : v | 0;
   }
 
   clear(): void {
@@ -54,7 +56,7 @@ export class TemperatureField {
     this.buffer.fill(0);
   }
 
-  /** Single-pass physical diffusion + emitter reset, active chunks only. */
+  /** Single-pass physical diffusion + emitter pull, active chunks only. */
   diffuse(grid: Grid, lu: ThermalLookups): void {
     const { width, temps, buffer } = this;
     const { chunkSize, chunksX, chunksY } = grid;
@@ -113,8 +115,6 @@ export class TemperatureField {
             // swing fast. Same energy flux, different dT.
             sum *= invHeatCapacity[id];
 
-            // Clamp per-tick delta for a second layer of stability and
-            // "feel" — a single neighbour can't instantly reshape a cell.
             if (sum > MAX_DELTA_PER_TICK) sum = MAX_DELTA_PER_TICK;
             else if (sum < -MAX_DELTA_PER_TICK) sum = -MAX_DELTA_PER_TICK;
 
@@ -123,12 +123,13 @@ export class TemperatureField {
               newT += (emitTemp[id] - newT) * emitStrength[id];
             }
 
-            const clamped = newT < -128 ? -128 : newT > 127 ? 127 : newT | 0;
+            const clamped =
+              newT < TEMP_MIN ? TEMP_MIN : newT > TEMP_MAX ? TEMP_MAX : newT | 0;
             buffer[idx] = clamped;
 
             // Noticeable thermal mass → keep the chunk alive next tick so
             // the front can cross chunk borders without decaying to ambient.
-            if (clamped > 3 || clamped < -3) grid.wake(x, y);
+            if (clamped > WAKE_THRESHOLD || clamped < -WAKE_THRESHOLD) grid.wake(x, y);
           }
         }
       }

@@ -5,37 +5,46 @@ import { registryArray } from '@/elements/registry';
 import { Camera } from './Camera';
 import { VisualLookups } from './VisualLookups';
 import { HeatMode } from '@/state/Store';
+import { TEMP_MAX, TEMP_MIN } from '@/core/Lookups';
 
 // ─── heat-map palette ──────────────────────────────────────────────────
-// Centre-weighted "coolwarm" ramp — scientific convention and the only
-// way the eye can separate hot / cold / neutral at a glance:
-//   t = -128  deep navy        (very cold)
-//   t =  -60  blue
-//   t =  -10  light cyan
-//   t =    0  near-white       (ambient, reads as "nothing")
-//   t =  +15  pale amber
-//   t =  +60  orange
-//   t = +100  deep red
-//   t = +127  white-hot        (over-hot)
+// Stops are keyed by absolute °C. Between them the LUT interpolates
+// linearly, so real-world milestones land on recognisable colours:
+//   -200 → deep navy           (cryo territory)
+//      0 → pale blue-white     (water freezes)
+//     20 → near-neutral        (room temp / ambient)
+//    100 → cream-yellow        (water boils)
+//    300 → orange              (wood ignites)
+//    800 → red                 (torch / lava glow)
+//   1500 → yellow-white        (iron softens)
+//   3000 → white-hot
+//   5000 → blue-tinted white   (plasma ceiling)
 const HEATMAP_STOPS: Array<[number, number, number, number]> = [
-  [0.00, 6, 10, 50],
-  [0.15, 28, 58, 170],
-  [0.30, 70, 140, 220],
-  [0.42, 150, 200, 240],
-  [0.48, 220, 235, 248],
-  [0.501, 250, 248, 240],
-  [0.52, 255, 230, 200],
-  [0.58, 255, 200, 140],
-  [0.66, 255, 160, 70],
-  [0.76, 250, 100, 30],
-  [0.88, 200, 30, 25],
-  [1.00, 255, 240, 210],
+  [-273, 4, 6, 18],
+  [-200, 8, 14, 72],
+  [-100, 30, 62, 168],
+  [-40, 90, 170, 230],
+  [0, 210, 230, 248],
+  [20, 248, 248, 240],
+  [60, 255, 240, 200],
+  [100, 255, 222, 160],
+  [200, 255, 192, 110],
+  [400, 255, 140, 60],
+  [800, 255, 80, 30],
+  [1200, 240, 40, 30],
+  [1800, 255, 160, 80],
+  [2500, 255, 220, 150],
+  [3500, 230, 235, 230],
+  [4500, 210, 220, 255],
+  [5000, 255, 255, 255],
 ];
 
+const HEATMAP_LUT_SIZE = 512;
+const HEATMAP_LUT_SCALE = (HEATMAP_LUT_SIZE - 1) / (TEMP_MAX - TEMP_MIN);
 const HEATMAP_LUT = (() => {
-  const lut = new Uint8ClampedArray(256 * 3);
-  for (let i = 0; i < 256; i++) {
-    const t = i / 255;
+  const lut = new Uint8ClampedArray(HEATMAP_LUT_SIZE * 3);
+  for (let i = 0; i < HEATMAP_LUT_SIZE; i++) {
+    const t = TEMP_MIN + i / HEATMAP_LUT_SCALE;
     let a = HEATMAP_STOPS[0]!;
     let b = HEATMAP_STOPS[HEATMAP_STOPS.length - 1]!;
     for (let s = 0; s < HEATMAP_STOPS.length - 1; s++) {
@@ -175,10 +184,12 @@ export class Renderer {
       const p = i * 4;
 
       // ── HEATMAP MODE — dominant palette, hides the material. ─────────
-      // Cheapest path: directly look up LUT by temperature byte.
       if (heatmapMode) {
         const t = temps[i];
-        const lutIdx = (t + 128) * 3;
+        let bucket = ((t - TEMP_MIN) * HEATMAP_LUT_SCALE) | 0;
+        if (bucket < 0) bucket = 0;
+        else if (bucket >= HEATMAP_LUT_SIZE) bucket = HEATMAP_LUT_SIZE - 1;
+        const lutIdx = bucket * 3;
         data[p] = HEATMAP_LUT[lutIdx];
         data[p + 1] = HEATMAP_LUT[lutIdx + 1];
         data[p + 2] = HEATMAP_LUT[lutIdx + 2];
@@ -216,7 +227,7 @@ export class Renderer {
         // Tint mode shows air temperature at full strength; the default
         // (off) mode still hints at thermal gradients with a faint haze
         // so a heated / cooled room is visibly different from empty space.
-        const threshold = tintMode ? 3 : 10;
+        const threshold = tintMode ? 15 : 60;
         if (t > threshold || t < -threshold) {
           const tint = tempTint(t);
           const a = tint.a * (tintMode ? 1 : 0.3);
@@ -291,7 +302,7 @@ export class Renderer {
       }
 
       if (tintMode) {
-        if (t > 3 || t < -3) {
+        if (t > 15 || t < -15) {
           const tint = tempTint(t);
           r = clamp255(r * (1 - tint.a) + tint.r * tint.a);
           g = clamp255(g * (1 - tint.a) + tint.g * tint.a);
@@ -404,27 +415,34 @@ const clamp255 = (v: number): number => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 /**
  * Smoother temperature tint using an eased ramp.
  * Cold → pale blue, warm → amber, hot → red-orange, very hot → white-hot.
+ * Saturates at 1500° on the warm side (white-hot metal) and at −200°
+ * on the cold side (liquid-nitrogen territory).
  */
 const tempTint = (t: number): { r: number; g: number; b: number; a: number } => {
-  if (t >= 10) {
-    const n = Math.min(1, (t - 10) / 110);
-    // lerp: amber (255, 180, 20) → red-orange (255, 70, 10) → near-white core (255, 230, 200)
+  if (t >= 20) {
+    const n = Math.min(1, (t - 20) / 1480);
     let r = 255;
-    let g = Math.round(180 * (1 - n) + 230 * Math.pow(n, 2));
-    let b = Math.round(20 * (1 - n) + 200 * Math.pow(n, 3));
-    // Pull back toward amber for mid values
-    if (n < 0.7) {
-      g = Math.round(180 - n * 110);
-      b = Math.round(20 - n * 10);
+    let g: number;
+    let b: number;
+    if (n < 0.5) {
+      // amber → red-orange
+      const k = n / 0.5;
+      g = Math.round(200 - 130 * k);
+      b = Math.round(80 - 60 * k);
+    } else {
+      // red-orange → white-hot
+      const k = (n - 0.5) / 0.5;
+      g = Math.round(70 + 185 * Math.pow(k, 1.5));
+      b = Math.round(20 + 235 * Math.pow(k, 2));
     }
-    const a = 0.15 + Math.pow(n, 0.6) * 0.5;
+    const a = 0.15 + Math.pow(n, 0.5) * 0.55;
     return { r, g, b, a };
   }
-  if (t <= -10) {
-    const n = Math.min(1, Math.abs(t + 10) / 100);
-    const r = Math.round(140 - n * 50);
-    const g = Math.round(180 - n * 30);
-    const b = Math.round(255);
+  if (t <= 0) {
+    const n = Math.min(1, Math.abs(t) / 200);
+    const r = Math.round(150 - n * 90);
+    const g = Math.round(200 - n * 60);
+    const b = 255;
     const a = 0.15 + Math.pow(n, 0.6) * 0.55;
     return { r, g, b, a };
   }

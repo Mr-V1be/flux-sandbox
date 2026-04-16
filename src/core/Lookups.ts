@@ -9,23 +9,29 @@ import { ElementDefinition } from './types';
  * keeps the loop monomorphic for V8.
  */
 
-const NO_SENTINEL = 0;
+/**
+ * Temperature range stored per cell, in °C. The range is wide enough to
+ * hold everything from liquid-nitrogen cryo (−196°) up to plasma-hot
+ * plasma / nuclear fire (~5000°). All thermal arrays and UI slider
+ * clamps read these constants so changing the range here is safe.
+ */
+export const TEMP_MIN = -273;
+export const TEMP_MAX = 5000;
 
 /**
  * Stability cap on a single edge's diffusion coefficient.
  * For 4 neighbours the explicit forward-Euler Laplacian scheme is
- * stable when per-edge k ≤ 0.25. We pick 0.22 for a safe margin —
- * so the strongest possible pair (copper ↔ copper) still converges
- * without oscillation.
+ * stable when per-edge k ≤ 0.25. We pick 0.22 for a safe margin.
  */
 export const MAX_EDGE_K = 0.22;
 
 /**
  * Clamp on the absolute temperature delta applied to a cell in one
- * tick. A cell surrounded by 4 very-hot neighbours would otherwise
- * spike unrealistically.
+ * tick, after heat-capacity scaling. Bounds the oscillation amplitude
+ * on marginally stable combinations (air next to hot metal, …) while
+ * still letting a 1000° gradient equilibrate in a handful of ticks.
  */
-export const MAX_DELTA_PER_TICK = 48;
+export const MAX_DELTA_PER_TICK = 600;
 
 export interface ThermalLookups {
   /** Thermal conductivity 0..0.25. */
@@ -41,29 +47,29 @@ export interface ThermalLookups {
   /** Precomputed side length of edgeK; edgeK[i] covers ids 0..(size-1). */
   edgeKSize: number;
   /** Emit target temp (only valid if hasEmit=1). */
-  emitTemp: Int8Array;
+  emitTemp: Int16Array;
   /** How hard emitTemp is applied (0..1). */
   emitStrength: Float32Array;
   hasEmit: Uint8Array;
   /** Ignition threshold. */
-  ignitesAt: Int8Array;
+  ignitesAt: Int16Array;
   /** Explosion radius on ignition; 0 = none. */
   explodeRadius: Uint8Array;
   hasIgnite: Uint8Array;
   /** Melt (solid→liquid) threshold + target. */
-  meltAt: Int8Array;
+  meltAt: Int16Array;
   meltsInto: Int32Array;
   hasMelt: Uint8Array;
   /** Freeze (liquid→solid) threshold + target. */
-  freezeAt: Int8Array;
+  freezeAt: Int16Array;
   freezesInto: Int32Array;
   hasFreeze: Uint8Array;
   /** Boil (liquid→gas) threshold + target. */
-  boilAt: Int8Array;
+  boilAt: Int16Array;
   boilsInto: Int32Array;
   hasBoil: Uint8Array;
   /** Condense (gas→liquid) threshold + target. */
-  condenseAt: Int8Array;
+  condenseAt: Int16Array;
   condensesInto: Int32Array;
   hasCondense: Uint8Array;
   /** Set true if the element has any thermal profile at all. */
@@ -76,6 +82,9 @@ export interface ThermalLookups {
    */
   needsActive: Uint8Array;
 }
+
+const clampTemp = (v: number): number =>
+  v < TEMP_MIN ? TEMP_MIN : v > TEMP_MAX ? TEMP_MAX : v | 0;
 
 export const buildThermalLookups = (
   registry: readonly ElementDefinition[],
@@ -92,25 +101,23 @@ export const buildThermalLookups = (
 
   const conductivity = new Float32Array(size);
   const invHeatCapacity = new Float32Array(size);
-  // Precompute 1/capacity so the hot loop uses a multiply, not a divide.
-  // Default capacity = 1.0 (inverse 1.0).
   for (let i = 0; i < size; i++) invHeatCapacity[i] = 1.0;
-  const emitTemp = new Int8Array(size);
+  const emitTemp = new Int16Array(size);
   const emitStrength = new Float32Array(size);
   const hasEmit = new Uint8Array(size);
-  const ignitesAt = new Int8Array(size);
+  const ignitesAt = new Int16Array(size);
   const explodeRadius = new Uint8Array(size);
   const hasIgnite = new Uint8Array(size);
-  const meltAt = new Int8Array(size);
+  const meltAt = new Int16Array(size);
   const meltsInto = new Int32Array(size);
   const hasMelt = new Uint8Array(size);
-  const freezeAt = new Int8Array(size);
+  const freezeAt = new Int16Array(size);
   const freezesInto = new Int32Array(size);
   const hasFreeze = new Uint8Array(size);
-  const boilAt = new Int8Array(size);
+  const boilAt = new Int16Array(size);
   const boilsInto = new Int32Array(size);
   const hasBoil = new Uint8Array(size);
-  const condenseAt = new Int8Array(size);
+  const condenseAt = new Int16Array(size);
   const condensesInto = new Int32Array(size);
   const hasCondense = new Uint8Array(size);
   const hasThermal = new Uint8Array(size);
@@ -135,34 +142,33 @@ export const buildThermalLookups = (
     if (p.heatCapacity !== undefined && p.heatCapacity > 0) {
       invHeatCapacity[id] = 1 / p.heatCapacity;
     }
-    void MAX_DELTA_PER_TICK;
     if (p.emitTemp !== undefined) {
-      emitTemp[id] = p.emitTemp;
+      emitTemp[id] = clampTemp(p.emitTemp);
       emitStrength[id] = p.emitStrength ?? 1;
       hasEmit[id] = 1;
     }
     if (p.ignitesAt !== undefined) {
-      ignitesAt[id] = p.ignitesAt;
+      ignitesAt[id] = clampTemp(p.ignitesAt);
       explodeRadius[id] = p.explodeRadius ?? 0;
       hasIgnite[id] = 1;
     }
     if (p.meltAt !== undefined) {
-      meltAt[id] = p.meltAt;
+      meltAt[id] = clampTemp(p.meltAt);
       meltsInto[id] = resolve(p.meltsInto);
       if (meltsInto[id] >= 0) hasMelt[id] = 1;
     }
     if (p.freezeAt !== undefined) {
-      freezeAt[id] = p.freezeAt;
+      freezeAt[id] = clampTemp(p.freezeAt);
       freezesInto[id] = resolve(p.freezesInto);
       if (freezesInto[id] >= 0) hasFreeze[id] = 1;
     }
     if (p.boilAt !== undefined) {
-      boilAt[id] = p.boilAt;
+      boilAt[id] = clampTemp(p.boilAt);
       boilsInto[id] = resolve(p.boilsInto);
       if (boilsInto[id] >= 0) hasBoil[id] = 1;
     }
     if (p.condenseAt !== undefined) {
-      condenseAt[id] = p.condenseAt;
+      condenseAt[id] = clampTemp(p.condenseAt);
       condensesInto[id] = resolve(p.condensesInto);
       if (condensesInto[id] >= 0) hasCondense[id] = 1;
     }
@@ -180,8 +186,6 @@ export const buildThermalLookups = (
       }
     }
   }
-
-  void NO_SENTINEL;
 
   // Precompute harmonic-mean edge coefficient for every element pair.
   // Formula: k_pair = 2 * k_a * k_b / (k_a + k_b), clamped to MAX_EDGE_K.

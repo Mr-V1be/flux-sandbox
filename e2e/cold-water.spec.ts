@@ -123,10 +123,10 @@ test('water painted at −100° stays cold through movement', async ({ page }) =
   // at the destination, so it never froze at all.
   expect(readout.iceCount).toBeGreaterThan(20);
   expect(readout.waterCount).toBe(0);
-  // Ice emits -15° with strength 0.10, so the patch stabilises near -15.
-  expect(readout.avgTemp).toBeLessThan(-8);
-  // The adjacent air cell has been chilled by the ice patch.
-  expect(readout.airClose).toBeLessThan(-1);
+  // Ice emits at −5°C with strength 0.10, so the patch stabilises near it.
+  expect(readout.avgTemp).toBeLessThan(0);
+  // The adjacent air cell is pulled below room temp by the ice patch.
+  expect(readout.airClose).toBeLessThan(20);
 });
 
 test('air painted at -100° with eraser cools the empty cell', async ({ page }) => {

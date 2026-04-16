@@ -7,10 +7,15 @@ export const BRUSH_SHAPES: BrushShape[] = ['circle', 'square', 'spray', 'line', 
 export type HeatMode = 'off' | 'tint' | 'heatmap';
 export const HEAT_MODES: HeatMode[] = ['off', 'tint', 'heatmap'];
 
-/** Default ambient air temperature (°) — 0 reads neutral on the heat-map. */
-export const DEFAULT_AMBIENT_TEMP = 0;
-export const AMBIENT_TEMP_MIN = -100;
-export const AMBIENT_TEMP_MAX = 127;
+/**
+ * Ambient air temperature range in °C.
+ *   -200  approaches liquid-nitrogen territory (cryo pool)
+ *     20  room temperature — neutral default
+ *   5000  plasma / nuclear-fire ceiling
+ */
+export const DEFAULT_AMBIENT_TEMP = 20;
+export const AMBIENT_TEMP_MIN = -200;
+export const AMBIENT_TEMP_MAX = 5000;
 
 export interface UiState {
   selectedKey: string;

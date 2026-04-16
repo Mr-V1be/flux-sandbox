@@ -26,7 +26,7 @@ export class Grid implements GridApi {
    * falling through warm air doesn't instantly reheat at its destination
    * while leaving a phantom cold spot behind. Set via `linkField()`.
    */
-  private field: { temps: Int8Array } | null = null;
+  private field: { temps: Int16Array } | null = null;
 
   constructor(
     public readonly width: number,
@@ -83,7 +83,7 @@ export class Grid implements GridApi {
   }
 
   /** Attach a temperature field so swaps move temperatures along with cells. */
-  linkField(field: { temps: Int8Array }): void {
+  linkField(field: { temps: Int16Array }): void {
     this.field = field;
   }
 

@@ -140,12 +140,12 @@ export class Topbar {
         </div>
 
         <div class="flex items-center gap-2 ml-3 pl-3 border-l border-neutral-800/70 temp-cluster"
-             title="Ambient air temperature (double-click to reset to 0°). Materials keep their own natural temperature.">
+             title="Ambient air temperature in °C (−200 cryo … 5000 plasma). Double-click to snap back to 20°. Materials keep their own natural temperature.">
           <i data-lucide="thermometer" class="h-3.5 w-3.5"></i>
           <input type="range" min="${AMBIENT_TEMP_MIN}" max="${AMBIENT_TEMP_MAX}"
-            value="${DEFAULT_AMBIENT_TEMP}" step="1" data-ctrl="temp"
-            class="accent-neutral-200 w-24 h-1" />
-          <span data-out="temp" class="text-xs text-neutral-400 tabular-nums w-9 text-right">${DEFAULT_AMBIENT_TEMP}°</span>
+            value="${DEFAULT_AMBIENT_TEMP}" step="10" data-ctrl="temp"
+            class="accent-neutral-200 w-28 h-1" />
+          <span data-out="temp" class="text-xs text-neutral-400 tabular-nums w-12 text-right">${DEFAULT_AMBIENT_TEMP}°</span>
         </div>
 
         <button data-act="thermal" class="ui-btn ml-3" aria-label="Heat overlay" title="Heat overlay (T)">
@@ -470,13 +470,15 @@ export class Topbar {
       this.brushLabel.textContent = String(s.brushSize);
       this.tempSlider.value = String(s.ambientTemp);
       this.tempLabel.textContent = `${s.ambientTemp}°`;
-      // Colour the readout: blue cold, neutral warm, amber hot.
+      // Colour the readout: blue cold, neutral warm, amber hot, white-hot above 1000°.
       this.tempLabel.style.color =
-        s.ambientTemp >= 60
-          ? '#ffb06a'
-          : s.ambientTemp <= -10
-            ? '#8ac8ff'
-            : '#a1a1aa';
+        s.ambientTemp >= 1000
+          ? '#fff0c0'
+          : s.ambientTemp >= 200
+            ? '#ffb06a'
+            : s.ambientTemp <= -20
+              ? '#8ac8ff'
+              : '#a1a1aa';
       this.fpsEl.textContent = s.fps.toFixed(0);
       this.cellsEl.textContent = s.activeCells.toLocaleString();
       this.chunksEl.textContent = s.activeChunks.toLocaleString();

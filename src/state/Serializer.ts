@@ -8,9 +8,10 @@ import { TemperatureField } from '@/core/TemperatureField';
  *   bytes  0..3   magic "FLX1"                      (big-endian marker)
  *   bytes  4..7   grid width  (Uint32)
  *   bytes  8..11  grid height (Uint32)
- *   bytes 12..15  version     (Uint32, currently 1)
+ *   bytes 12..15  version     (Uint32; 1 = Int8 temps, 2 = Int16 temps)
  *   bytes 16..    w*h * 4     grid cells (Uint32Array)
- *   bytes ...     w*h         temperature (Int8Array)
+ *   bytes ...     w*h * 2     temperature (Int16Array, v2)
+ *                 or w*h      temperature (Int8Array, v1 legacy read-only)
  *
  * The whole buffer is gzipped through the browser's native
  * `CompressionStream('gzip')` and then base64url-encoded so it fits
@@ -18,14 +19,14 @@ import { TemperatureField } from '@/core/TemperatureField';
  */
 
 const MAGIC = 0x464c5831; // 'F','L','X','1'
-const VERSION = 1;
+const VERSION = 2;
 const HEADER_BYTES = 16;
 
 export async function serialize(grid: Grid, field: TemperatureField): Promise<string> {
   const w = grid.width;
   const h = grid.height;
   const size = w * h;
-  const buf = new ArrayBuffer(HEADER_BYTES + size * 4 + size);
+  const buf = new ArrayBuffer(HEADER_BYTES + size * 4 + size * 2);
   const view = new DataView(buf);
 
   view.setUint32(0, MAGIC, false); // big-endian magic
@@ -34,7 +35,7 @@ export async function serialize(grid: Grid, field: TemperatureField): Promise<st
   view.setUint32(12, VERSION, true);
 
   new Uint32Array(buf, HEADER_BYTES, size).set(grid.cells);
-  new Int8Array(buf, HEADER_BYTES + size * 4, size).set(field.temps);
+  new Int16Array(buf, HEADER_BYTES + size * 4, size).set(field.temps);
 
   const compressed = await gzip(new Uint8Array(buf));
   return u8ToBase64Url(compressed);
@@ -62,7 +63,7 @@ export async function deserialize(
     const h = view.getUint32(8, true);
     const version = view.getUint32(12, true);
 
-    if (version !== VERSION) {
+    if (version !== 1 && version !== 2) {
       return { ok: false, reason: `unsupported payload version ${version}` };
     }
     if (w !== grid.width || h !== grid.height) {
@@ -75,8 +76,14 @@ export async function deserialize(
     const size = w * h;
     const cellsView = new Uint32Array(buf, HEADER_BYTES, size);
     grid.cells.set(cellsView);
-    const tempsView = new Int8Array(buf, HEADER_BYTES + size * 4, size);
-    field.temps.set(tempsView);
+    if (version === 2) {
+      const tempsView = new Int16Array(buf, HEADER_BYTES + size * 4, size);
+      field.temps.set(tempsView);
+    } else {
+      // Legacy Int8 temps — widen into the Int16 field.
+      const legacy = new Int8Array(buf, HEADER_BYTES + size * 4, size);
+      for (let i = 0; i < size; i++) field.temps[i] = legacy[i];
+    }
     grid.wakeAll();
     return { ok: true };
   } catch (err) {

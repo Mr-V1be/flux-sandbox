@@ -11,11 +11,11 @@ test('slider only drives ambient; selecting elements never touches it', async ({
     timeout: 15_000,
   });
 
-  // Fresh scene — ambient starts at 0°.
+  // Fresh scene — ambient starts at room temperature (20 °C).
   const initial = await page.evaluate(() => {
     const f = (window as unknown as {
       flux: {
-        simulation: { lookups: { emitTemp: Int8Array } };
+        simulation: { lookups: { emitTemp: Int16Array } };
         getIdByKey: (k: string) => number;
         store: { getState: () => { ambientTemp: number } };
       };
@@ -25,14 +25,14 @@ test('slider only drives ambient; selecting elements never touches it', async ({
       emit: f.simulation.lookups.emitTemp[f.getIdByKey('empty')],
     };
   });
-  expect(initial.ambient).toBe(0);
-  expect(initial.emit).toBe(0);
+  expect(initial.ambient).toBe(20);
+  expect(initial.emit).toBe(20);
 
   // Selecting lava does NOT touch ambient.
   const afterSelectLava = await page.evaluate(() => {
     const f = (window as unknown as {
       flux: {
-        simulation: { lookups: { emitTemp: Int8Array } };
+        simulation: { lookups: { emitTemp: Int16Array } };
         getIdByKey: (k: string) => number;
         store: {
           getState: () => { setSelected: (k: string) => void; ambientTemp: number };
@@ -45,34 +45,34 @@ test('slider only drives ambient; selecting elements never touches it', async ({
       emit: f.simulation.lookups.emitTemp[f.getIdByKey('empty')],
     };
   });
-  expect(afterSelectLava.ambient).toBe(0);
-  expect(afterSelectLava.emit).toBe(0);
+  expect(afterSelectLava.ambient).toBe(20);
+  expect(afterSelectLava.emit).toBe(20);
 
-  // Drag the slider to 80° — ambient + empty.emitTemp follow.
+  // Drag the slider to 800° — ambient + empty.emitTemp follow.
   const afterDrag = await page.evaluate(() => {
     const f = (window as unknown as {
       flux: {
-        simulation: { lookups: { emitTemp: Int8Array } };
+        simulation: { lookups: { emitTemp: Int16Array } };
         getIdByKey: (k: string) => number;
         store: {
           getState: () => { setAmbientTemp: (t: number) => void; ambientTemp: number };
         };
       };
     }).flux;
-    f.store.getState().setAmbientTemp(80);
+    f.store.getState().setAmbientTemp(800);
     return {
       ambient: f.store.getState().ambientTemp,
       emit: f.simulation.lookups.emitTemp[f.getIdByKey('empty')],
     };
   });
-  expect(afterDrag.ambient).toBe(80);
-  expect(afterDrag.emit).toBe(80);
+  expect(afterDrag.ambient).toBe(800);
+  expect(afterDrag.emit).toBe(800);
 
   // Selecting water still doesn't touch ambient.
   const afterSelectWater = await page.evaluate(() => {
     const f = (window as unknown as {
       flux: {
-        simulation: { lookups: { emitTemp: Int8Array } };
+        simulation: { lookups: { emitTemp: Int16Array } };
         getIdByKey: (k: string) => number;
         store: {
           getState: () => { setSelected: (k: string) => void; ambientTemp: number };
@@ -85,8 +85,8 @@ test('slider only drives ambient; selecting elements never touches it', async ({
       emit: f.simulation.lookups.emitTemp[f.getIdByKey('empty')],
     };
   });
-  expect(afterSelectWater.ambient).toBe(80);
-  expect(afterSelectWater.emit).toBe(80);
+  expect(afterSelectWater.ambient).toBe(800);
+  expect(afterSelectWater.emit).toBe(800);
 });
 
 test('new ambient snaps every existing empty cell instantly', async ({ page }) => {
@@ -105,7 +105,7 @@ test('new ambient snaps every existing empty cell instantly', async ({ page }) =
     // Seed the probe cell to a random value BEFORE the ambient change so
     // we can check the snap overwrote it.
     f.simulation.field.set(100, 100, 50);
-    f.store.getState().setAmbientTemp(80);
+    f.store.getState().setAmbientTemp(800);
   });
 
   const temp = await page.evaluate(() => {
@@ -115,5 +115,5 @@ test('new ambient snaps every existing empty cell instantly', async ({ page }) =
     return f.simulation.field.get(100, 100);
   });
 
-  expect(temp).toBe(80);
+  expect(temp).toBe(800);
 });

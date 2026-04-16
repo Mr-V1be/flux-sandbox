@@ -253,8 +253,8 @@ export const antimatterBehavior: ElementBehavior = (ctx) => {
     const fireId = getIdByKey('fire');
     ctx.grid.set(nx, ny, encode(fireId, 60));
     ctx.grid.set(ctx.x, ctx.y, encode(fireId, 60));
-    ctx.field.set(nx, ny, 110);
-    ctx.field.set(ctx.x, ctx.y, 110);
+    ctx.field.set(nx, ny, 1000);
+    ctx.field.set(ctx.x, ctx.y, 1000);
     triggered = true;
   });
 };
@@ -316,7 +316,7 @@ export const geyserBehavior: ElementBehavior = (ctx) => {
     if (getElement(ctx.grid.get(ctx.x, y)) !== EMPTY_ID) break;
     if (dy <= 4) {
       ctx.grid.set(ctx.x, y, encode(steamId, 200));
-      ctx.field.set(ctx.x, y, 70);
+      ctx.field.set(ctx.x, y, 120);
     } else if (ctx.rand() < 0.4) {
       ctx.grid.set(ctx.x, y, encode(waterId));
     }

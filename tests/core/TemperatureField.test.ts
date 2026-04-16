@@ -67,21 +67,21 @@ describe('TemperatureField', () => {
     expect(Math.abs(field.get(8, 8))).toBeLessThan(10); // decays toward ambient 0
   });
 
-  it('set() clamps into Int8 range', () => {
+  it('set() clamps to the TEMP_MIN/TEMP_MAX range', () => {
     const field = new TemperatureField(4, 4);
-    field.set(0, 0, 999);
-    expect(field.get(0, 0)).toBe(127);
-    field.set(1, 0, -999);
-    expect(field.get(1, 0)).toBe(-128);
+    field.set(0, 0, 9999);
+    expect(field.get(0, 0)).toBe(5000);
+    field.set(1, 0, -9999);
+    expect(field.get(1, 0)).toBe(-273);
   });
 
   it('add() accumulates and clamps', () => {
     const field = new TemperatureField(4, 4);
-    field.set(0, 0, 100);
-    field.add(0, 0, 40);
-    expect(field.get(0, 0)).toBe(127);
-    field.add(0, 0, -500);
-    expect(field.get(0, 0)).toBe(-128);
+    field.set(0, 0, 4800);
+    field.add(0, 0, 400);
+    expect(field.get(0, 0)).toBe(5000);
+    field.add(0, 0, -10_000);
+    expect(field.get(0, 0)).toBe(-273);
   });
 
   it('clear() zeroes everything', () => {
