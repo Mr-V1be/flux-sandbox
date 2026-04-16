@@ -4,21 +4,44 @@ import { ElementDefinition } from '@/core/types';
  * Render-only per-element parameters, laid out as flat typed arrays so
  * the inner render loop never has to call `Map.get`.
  *
- * Keep this separate from the thermal lookups: those describe the
- * simulation (conductivity, phase transitions…), these describe pixels.
+ * Keep this separate from the thermal simulation lookups: those describe
+ * how heat flows (conductivity, phase transitions…), these describe how
+ * pixels look — including the black-body-style colour response that
+ * makes a cell glow red / white as its temperature rises, and the cold
+ * shift that dims it when it freezes.
  */
 export interface VisualLookups {
   /** Per-element bloom contribution (0..1). 0 = inert, 1 = fully glowing. */
   bloom: Float32Array;
-  /** Cached element ids for the handful of cells that bloom based on
-   *  their life byte (copper / iron charge) rather than a static value. */
+  /** Cached element ids for the few cells whose bloom scales with charge. */
   copperId: number;
   ironId: number;
+
+  // ── Thermal colour response — hot side (additive glow) ───────────────
+  /** Temperature at which the glow ramp starts (Int8, -128..127). */
+  glowStart: Int8Array;
+  /** Width of the ramp, in °. 0 sentinel = element never glows. */
+  glowRange: Uint8Array;
+  /** Max additive strength (0..1) reached at the end of the ramp. */
+  glowStrength: Float32Array;
+  glowR: Uint8Array;
+  glowG: Uint8Array;
+  glowB: Uint8Array;
+
+  // ── Thermal colour response — cold side (blend toward cold colour) ──
+  coldStart: Int8Array;
+  /** 0 sentinel = element never cold-shifts. */
+  coldRange: Uint8Array;
+  coldStrength: Float32Array;
+  coldR: Uint8Array;
+  coldG: Uint8Array;
+  coldB: Uint8Array;
 }
 
 /**
- * Hand-picked brightness contributions. Keyed by element `key`, not id,
- * so adding / renaming elements won't silently break the glow.
+ * Hand-picked bloom intensities per element.
+ * Fire, lava, torch are brightest; crystalline / portal elements get
+ * subtle halos. Copper / iron start at 0 and rise dynamically with charge.
  */
 const BLOOM_BY_KEY: Record<string, number> = {
   fire: 0.95,
@@ -36,11 +59,116 @@ const BLOOM_BY_KEY: Record<string, number> = {
   ice9: 0.2,
 };
 
+/**
+ * Hot glow response per element. Each entry defines:
+ *   at       — temperature (°) where the glow starts bleeding in
+ *   range    — width of the glow ramp in °; `norm = (t - at) / range`
+ *   color    — RGB tint added (additive blend, clipped at 255)
+ *   strength — scales `norm` so the final additive term peaks at
+ *              `strength` at the top of the ramp (and up to 1.3x for
+ *              white-hot "over-bright" when the cell is past `at+range`)
+ *
+ * Calibrated from black-body radiation reference:
+ *   - Metals glow red at 45..55° and approach yellow-white past 120°.
+ *   - Ceramics (stone, obsidian, glass) emit dull red much later.
+ *   - Crystalline solids get a faint white / tinted halo.
+ *   - Reactive powders pre-heat into an orange sheen before auto-igniting.
+ */
+interface GlowConfig {
+  at: number;
+  range: number;
+  color: number;
+  strength: number;
+}
+
+const GLOW_BY_KEY: Record<string, GlowConfig> = {
+  // ── metals & conductors ─────────────────────────────────────────────
+  copper: { at: 45, range: 80, color: 0xff4020, strength: 0.9 },
+  iron: { at: 55, range: 75, color: 0xff3010, strength: 0.85 },
+  mercury: { at: 60, range: 75, color: 0xff5040, strength: 0.6 },
+  magnet: { at: 50, range: 80, color: 0xff4020, strength: 0.7 },
+  battery: { at: 55, range: 80, color: 0xff4830, strength: 0.5 },
+  lightning_rod: { at: 55, range: 80, color: 0xffa020, strength: 0.7 },
+
+  // ── ceramics that go red-hot ────────────────────────────────────────
+  stone: { at: 70, range: 60, color: 0xc02810, strength: 0.55 },
+  obsidian: { at: 75, range: 55, color: 0xa02010, strength: 0.5 },
+  glass: { at: 85, range: 45, color: 0xff5820, strength: 0.55 },
+
+  // ── powders near their melting / reacting point ─────────────────────
+  sand: { at: 90, range: 40, color: 0xffa030, strength: 0.45 },
+  salt: { at: 95, range: 40, color: 0xff8030, strength: 0.35 },
+  mud: { at: 35, range: 20, color: 0xff8040, strength: 0.3 },
+  ash: { at: 70, range: 50, color: 0xff4020, strength: 0.35 },
+  dust: { at: 50, range: 30, color: 0xff8040, strength: 0.3 },
+
+  // ── wood / organic chars before burning ─────────────────────────────
+  wood: { at: 55, range: 25, color: 0xff3010, strength: 0.35 },
+  coal: { at: 50, range: 25, color: 0xff4520, strength: 0.65 },
+  fuse: { at: 40, range: 25, color: 0xff3010, strength: 0.45 },
+  plant: { at: 30, range: 20, color: 0xff5030, strength: 0.3 },
+
+  // ── crystalline — subtle whitish halo ───────────────────────────────
+  diamond: { at: 60, range: 70, color: 0xfff5e0, strength: 0.35 },
+  crystal: { at: 55, range: 70, color: 0xffa0e0, strength: 0.4 },
+
+  // ── reactive pre-ignition heat ──────────────────────────────────────
+  uranium: { at: 50, range: 60, color: 0xa0ff80, strength: 0.3 },
+  thermite: { at: 55, range: 30, color: 0xff7020, strength: 0.55 },
+  gunpowder: { at: 30, range: 25, color: 0xff4020, strength: 0.55 },
+  nitro: { at: 5, range: 25, color: 0xff4010, strength: 0.6 },
+  bomb: { at: 25, range: 20, color: 0xff4030, strength: 0.55 },
+
+  // ── specialty ───────────────────────────────────────────────────────
+  nanobots: { at: 60, range: 60, color: 0xffbb50, strength: 0.5 },
+  wax: { at: 30, range: 25, color: 0xffd080, strength: 0.3 },
+  waxliq: { at: 50, range: 30, color: 0xffa048, strength: 0.4 },
+  ice9: { at: 10, range: 15, color: 0xfff0ff, strength: 0.3 },
+  antimatter: { at: 30, range: 50, color: 0xffb0e0, strength: 0.5 },
+};
+
+/**
+ * Cold response per element: blends toward a darker / bluer tint.
+ * Only a handful of materials have distinct sub-zero appearance —
+ * everything else just freezes off-colour with no special render.
+ */
+interface ColdConfig {
+  at: number;
+  range: number;
+  color: number;
+  strength: number;
+}
+
+const COLD_BY_KEY: Record<string, ColdConfig> = {
+  water: { at: -3, range: 30, color: 0x90c4ff, strength: 0.55 },
+  mercury: { at: -30, range: 80, color: 0x5070a8, strength: 0.5 },
+  stone: { at: -40, range: 80, color: 0x2a3858, strength: 0.45 },
+  copper: { at: -40, range: 80, color: 0x704030, strength: 0.35 },
+  iron: { at: -40, range: 80, color: 0x505a70, strength: 0.35 },
+  sand: { at: -40, range: 80, color: 0x8a7a5e, strength: 0.25 },
+  wood: { at: -40, range: 80, color: 0x5a3a1e, strength: 0.3 },
+  mushroom: { at: -20, range: 40, color: 0x88506a, strength: 0.4 },
+  plant: { at: -10, range: 30, color: 0x2d7450, strength: 0.4 },
+};
+
 export function buildVisualLookups(
   registry: readonly ElementDefinition[],
 ): VisualLookups {
   const size = registry.length;
   const bloom = new Float32Array(size);
+  const glowStart = new Int8Array(size);
+  const glowRange = new Uint8Array(size);
+  const glowStrength = new Float32Array(size);
+  const glowR = new Uint8Array(size);
+  const glowG = new Uint8Array(size);
+  const glowB = new Uint8Array(size);
+  const coldStart = new Int8Array(size);
+  const coldRange = new Uint8Array(size);
+  const coldStrength = new Float32Array(size);
+  const coldR = new Uint8Array(size);
+  const coldG = new Uint8Array(size);
+  const coldB = new Uint8Array(size);
+
   let copperId = -1;
   let ironId = -1;
   for (let i = 0; i < size; i++) {
@@ -49,6 +177,47 @@ export function buildVisualLookups(
     bloom[i] = BLOOM_BY_KEY[def.key] ?? 0;
     if (def.key === 'copper') copperId = i;
     if (def.key === 'iron') ironId = i;
+
+    const g = GLOW_BY_KEY[def.key];
+    if (g) {
+      glowStart[i] = clampI8(g.at);
+      glowRange[i] = clampU8(g.range);
+      glowStrength[i] = g.strength;
+      glowR[i] = (g.color >> 16) & 0xff;
+      glowG[i] = (g.color >> 8) & 0xff;
+      glowB[i] = g.color & 0xff;
+    }
+    // range = 0 is the "never glows" sentinel.
+
+    const c = COLD_BY_KEY[def.key];
+    if (c) {
+      coldStart[i] = clampI8(c.at);
+      coldRange[i] = clampU8(c.range);
+      coldStrength[i] = c.strength;
+      coldR[i] = (c.color >> 16) & 0xff;
+      coldG[i] = (c.color >> 8) & 0xff;
+      coldB[i] = c.color & 0xff;
+    }
   }
-  return { bloom, copperId, ironId };
+
+  return {
+    bloom,
+    copperId,
+    ironId,
+    glowStart,
+    glowRange,
+    glowStrength,
+    glowR,
+    glowG,
+    glowB,
+    coldStart,
+    coldRange,
+    coldStrength,
+    coldR,
+    coldG,
+    coldB,
+  };
 }
+
+const clampI8 = (v: number): number => (v < -128 ? -128 : v > 127 ? 127 : v | 0);
+const clampU8 = (v: number): number => (v < 0 ? 0 : v > 255 ? 255 : v | 0);

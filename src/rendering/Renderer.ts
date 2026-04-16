@@ -141,6 +141,20 @@ export class Renderer {
     const copperId = visualLookups.copperId;
     const ironId = visualLookups.ironId;
 
+    // Hoist thermal-response arrays into locals for tighter loop access.
+    const glowStart = visualLookups.glowStart;
+    const glowRange = visualLookups.glowRange;
+    const glowStrength = visualLookups.glowStrength;
+    const glowR = visualLookups.glowR;
+    const glowG = visualLookups.glowG;
+    const glowB = visualLookups.glowB;
+    const coldStart = visualLookups.coldStart;
+    const coldRange = visualLookups.coldRange;
+    const coldStrength = visualLookups.coldStrength;
+    const coldR = visualLookups.coldR;
+    const coldG = visualLookups.coldG;
+    const coldB = visualLookups.coldB;
+
     const tintMode = heatMode === 'tint';
     const heatmapMode = heatMode === 'heatmap';
 
@@ -230,8 +244,41 @@ export class Renderer {
         b = clamp255(b + delta);
       }
 
+      // ── Thermal colour response ────────────────────────────────────
+      // Hot cells glow additively (black-body-ish), cold cells blend
+      // toward a darker / bluer tint. Both happen in normal and tint
+      // modes so the material itself shows its temperature.
+      const t = temps[i];
+      let glowBoost = 0;
+      const gRange = glowRange[id];
+      if (gRange > 0) {
+        const gStart = glowStart[id];
+        if (t >= gStart) {
+          let norm = (t - gStart) / gRange;
+          if (norm > 1.3) norm = 1.3;
+          const a = norm * glowStrength[id];
+          r = clamp255(r + glowR[id] * a);
+          g = clamp255(g + glowG[id] * a);
+          b = clamp255(b + glowB[id] * a);
+          // Hot metal should visibly radiate — mix into bloom later.
+          glowBoost = a * 0.7;
+        }
+      }
+      const cRange = coldRange[id];
+      if (cRange > 0) {
+        const cStart = coldStart[id];
+        if (t <= cStart) {
+          let norm = (cStart - t) / cRange;
+          if (norm > 1) norm = 1;
+          const a = norm * coldStrength[id];
+          const inv = 1 - a;
+          r = clamp255(r * inv + coldR[id] * a);
+          g = clamp255(g * inv + coldG[id] * a);
+          b = clamp255(b * inv + coldB[id] * a);
+        }
+      }
+
       if (tintMode) {
-        const t = temps[i];
         if (t > 3 || t < -3) {
           const tint = tempTint(t);
           r = clamp255(r * (1 - tint.a) + tint.r * tint.a);
@@ -250,6 +297,7 @@ export class Renderer {
         const live = Math.min(1, life / 28);
         if (live > bAmt) bAmt = live;
       }
+      if (glowBoost > bAmt) bAmt = glowBoost;
 
       if (bAmt > 0) {
         bloomData[p] = (r * bAmt) | 0;
