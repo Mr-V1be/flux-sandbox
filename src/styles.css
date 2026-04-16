@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0a0a0b;
+  --color-bg-soft: #111113;
+  --color-panel: #141416;
+  --color-border: #1f1f22;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: #e5e5e7;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv04', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #18181b;
+    border: 1px solid #27272a;
+    color: #a1a1aa;
+  }
+}
+
+@layer components {
+  .ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    width: 28px;
+    border-radius: 6px;
+    border: 1px solid #1f1f22;
+    background: #111113;
+    color: #d4d4d8;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+  .ui-btn:hover {
+    background: #18181b;
+    color: #fafafa;
+  }
+  .ui-btn:active {
+    background: #0a0a0b;
+  }
+  .ui-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .is-active {
+    background-color: rgba(244, 244, 245, 0.06) !important;
+    border-color: rgba(244, 244, 245, 0.25) !important;
+    box-shadow: 0 0 0 1px rgba(244, 244, 245, 0.08) inset;
+  }
+}
+
+/* Canvas: pixel-perfect, no smoothing. */
+canvas.sim {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #050506;
+  cursor: crosshair;
+  touch-action: none;
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 60px -20px rgba(0, 0, 0, 0.7);
+}
+
+/* Slim scrollbar for sidebar. */
+.scroll-slim::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: #1f1f22;
+  border-radius: 4px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: #2a2a2f;
+}
